@@ -1,23 +1,20 @@
 // AFTERGLOW — anonymous, date-gated voting page.
-// Storage: Upstash Redis (durable, survives restarts) when configured via
-// env vars; otherwise a local data.json file so it still runs locally with
-// zero setup. Votes are atomic Redis counters — no lost votes under a burst
-// of simultaneous voters.
+// Storage: Upstash Redis (durable). Votes are atomic Redis counters — no lost
+// votes under a burst. One vote per IP+browser per poll (server-enforced).
 "use strict";
 
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const PORT = process.env.PORT || 8888;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "260908";
-const DATA_FILE = path.join(__dirname, "data.json");
 const INDEX_FILE = path.join(__dirname, "index.html");
 
-// ---- storage ----
+// ---- storage: Upstash Redis ----
 const REST_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-const useUpstash = !!(REST_URL && REST_TOKEN);
 const K_CONFIG = "afterglow:config";
 const K_VOTES = "afterglow:votes"; // redis hash: field = optionIndex, value = count
 
@@ -31,60 +28,33 @@ async function redis(cmd) {
   return (await res.json()).result;
 }
 
-// file fallback keeps a single {config, counts} object
-function fileLoad() {
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-  } catch {
-    return { config: null, counts: {} };
-  }
-}
-function fileSave(d) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2));
-}
-
 async function getConfig() {
-  if (useUpstash) {
-    const v = await redis(["GET", K_CONFIG]);
-    return v ? JSON.parse(v) : null;
-  }
-  return fileLoad().config;
+  const v = await redis(["GET", K_CONFIG]);
+  return v ? JSON.parse(v) : null;
 }
 async function setConfig(cfg) {
   // ponytail: last-writer-wins on config — fine, only the single admin writes it
-  if (useUpstash) return void (await redis(["SET", K_CONFIG, JSON.stringify(cfg)]));
-  const d = fileLoad();
-  d.config = cfg;
-  fileSave(d);
+  await redis(["SET", K_CONFIG, JSON.stringify(cfg)]);
 }
 async function addVote(i) {
-  if (useUpstash) return void (await redis(["HINCRBY", K_VOTES, String(i), 1])); // atomic
-  const d = fileLoad();
-  d.counts[i] = (d.counts[i] || 0) + 1;
-  fileSave(d);
+  await redis(["HINCRBY", K_VOTES, String(i), 1]); // atomic
 }
 async function getCounts() {
-  if (useUpstash) {
-    const flat = (await redis(["HGETALL", K_VOTES])) || []; // ["0","3","2","5",...]
-    const counts = {};
-    for (let j = 0; j < flat.length; j += 2) counts[flat[j]] = Number(flat[j + 1]);
-    return counts;
-  }
-  return fileLoad().counts || {};
+  const flat = (await redis(["HGETALL", K_VOTES])) || []; // ["0","3","2","5",...]
+  const counts = {};
+  for (let j = 0; j < flat.length; j += 2) counts[flat[j]] = Number(flat[j + 1]);
+  return counts;
 }
 async function resetVotes() {
-  if (useUpstash) return void (await redis(["DEL", K_VOTES]));
-  const d = fileLoad();
-  d.counts = {};
-  fileSave(d);
+  await redis(["DEL", K_VOTES]);
+  const cfg = await getConfig();
+  if (cfg && cfg.openDate) await redis(["DEL", "afterglow:voters:" + cfg.openDate]);
 }
 async function deleteAll() {
-  if (useUpstash) {
-    await redis(["DEL", K_CONFIG]);
-    await redis(["DEL", K_VOTES]);
-    return;
-  }
-  fileSave({ config: null, counts: {} });
+  const cfg = await getConfig();
+  if (cfg && cfg.openDate) await redis(["DEL", "afterglow:voters:" + cfg.openDate]);
+  await redis(["DEL", K_CONFIG]);
+  await redis(["DEL", K_VOTES]);
 }
 
 function json(res, data, status = 200) {
@@ -104,6 +74,14 @@ function todayStrSeoul() {
     day: "2-digit",
   });
   return fmt.format(new Date());
+}
+
+// 투표자 지문: 클라이언트 IP + 브라우저(UA) 해시. 같은 기기/브라우저는 같은 값.
+function voterId(req) {
+  const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const ip = xff || (req.socket && req.socket.remoteAddress) || "";
+  const ua = req.headers["user-agent"] || "";
+  return crypto.createHash("sha256").update(ip + "|" + ua).digest("hex").slice(0, 24);
 }
 
 function readBody(req) {
@@ -128,6 +106,10 @@ if (process.argv.includes("--selftest")) {
   console.assert(counts["0"] === 3 && counts["2"] === 5, "HGETALL parse");
   const today = todayStrSeoul();
   console.assert(/^\d{4}-\d{2}-\d{2}$/.test(today), "seoul date format");
+  const v1 = voterId({ headers: { "x-forwarded-for": "1.2.3.4", "user-agent": "A" }, socket: {} });
+  const v2 = voterId({ headers: { "x-forwarded-for": "1.2.3.4", "user-agent": "A" }, socket: {} });
+  const v3 = voterId({ headers: { "x-forwarded-for": "1.2.3.4", "user-agent": "B" }, socket: {} });
+  console.assert(v1 === v2 && v1 !== v3, "voterId dedup key");
   console.log("selftest ok:", today, counts);
   process.exit(0);
 }
@@ -184,6 +166,9 @@ const server = http.createServer(async (req, res) => {
         ) {
           return json(res, { error: "invalid_option" }, 400);
         }
+        // 중복투표 방지: 같은 IP+브라우저는 이 투표에 1회만 집계 (SADD는 원자적)
+        const fresh = await redis(["SADD", "afterglow:voters:" + cfg.openDate, voterId(req)]);
+        if (fresh === 0) return json(res, { error: "already_voted" }, 409);
         await addVote(body.optionIndex);
         return json(res, { ok: true });
       }
@@ -255,7 +240,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(
-    "AFTERGLOW on http://localhost:" + PORT + " — storage: " + (useUpstash ? "Upstash Redis" : "local file")
-  );
+  console.log("AFTERGLOW on http://localhost:" + PORT + " — storage: Upstash Redis");
 });

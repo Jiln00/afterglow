@@ -574,7 +574,12 @@
       console.error(err);
       els.submitBtn.disabled = false;
       els.submitBtn.textContent = '제출하기';
-      if(err.status === 403){
+      if(err.status === 409){
+        // 이미 참여한 기기 — 확인 화면으로 (중복투표 차단)
+        try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
+        hideAll();
+        els.screenSubmitted.hidden = false;
+      } else if(err.status === 403){
         alert('이벤트가 이미 마감됐어요. 페이지를 새로고침해주세요.');
         loadPublicState();
       } else {
