@@ -535,9 +535,8 @@
       }
       return;
     }
-    // 이미 투표했나? (서버 기준 + localStorage 보조)
+    // 이미 투표했나? (서버가 신원 기준으로 판단)
     var already = !!st.voted;
-    try { already = already || localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
     // 투표 전인데 이름을 아직 안 정했으면 → 진입(이름 입력) 화면
     if(!already && !state.voterName){
       hideAll();
@@ -611,10 +610,8 @@
     var st = state.publicState;
     if(!st || !st.isOpen) return;
 
-    // 이미 참여한 기기면 재투표 막고 확인 화면 (서버 왕복 없이 즉시)
-    var already = false;
-    try { already = localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
-    if(already){ showThanks(); return; }
+    // 이미 참여했으면(서버 기준) 재투표 막고 확인 화면
+    if(st.voted){ showThanks(); return; }
 
     if(!state.voterName){ renderParticipantView(); return; } // 이름 먼저
 
@@ -628,15 +625,15 @@
 
     api('submit', { optionIndex: state.selectedOptionIdx, name: state.voterName }).then(function(){
       state.selectedOptionIdx = null;
-      try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
+      if(state.publicState) state.publicState.voted = true;
       showThanks();
     }).catch(function(err){
       console.error(err);
       els.submitBtn.disabled = false;
       els.submitBtn.textContent = '제출하기';
       if(err.status === 409){
-        // 이미 참여한 기기 — 확인 화면 잠깐 뒤 메인으로 (중복투표 차단)
-        try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
+        // 이미 참여한 신원 — 확인 화면 (중복투표 차단)
+        if(state.publicState) state.publicState.voted = true;
         showThanks();
       } else if(err.status === 403){
         alert('이벤트가 이미 마감됐어요. 페이지를 새로고침해주세요.');
