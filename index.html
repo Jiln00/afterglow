@@ -504,6 +504,10 @@
       }
       return;
     }
+    // 이미 이 투표(openDate)에 참여한 기기면 완료 화면 — 재투표 불가
+    var voted = false;
+    try { voted = localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
+    if(voted){ hideAll(); els.screenSubmitted.hidden = false; return; }
     hideAll();
     els.screenParticipant.hidden = false;
     els.partTitle.textContent = st.title || '';
@@ -539,12 +543,12 @@
     }
   }
 
-  function showThanksThenMain(){
+  function showThanks(){
+    // 투표 완료 화면에 머묾 — 재투표 불가를 명확히
     hideAll();
     els.screenSubmitted.hidden = false;
     els.submitBtn.disabled = false;
     els.submitBtn.textContent = '제출하기';
-    setTimeout(function(){ loadPublicState(); }, 1800); // 잠깐 보여준 뒤 메인으로
   }
 
   els.submitBtn.addEventListener('click', function(){
@@ -554,7 +558,7 @@
     // 이미 참여한 기기면 재투표 막고 확인 화면 (서버 왕복 없이 즉시)
     var already = false;
     try { already = localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
-    if(already){ showThanksThenMain(); return; }
+    if(already){ showThanks(); return; }
 
     if(state.selectedOptionIdx === null){
       alert('선택지를 골라주세요.');
@@ -567,7 +571,7 @@
     api('submit', { optionIndex: state.selectedOptionIdx }).then(function(){
       state.selectedOptionIdx = null;
       try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
-      showThanksThenMain();
+      showThanks();
     }).catch(function(err){
       console.error(err);
       els.submitBtn.disabled = false;
@@ -575,7 +579,7 @@
       if(err.status === 409){
         // 이미 참여한 기기 — 확인 화면 잠깐 뒤 메인으로 (중복투표 차단)
         try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
-        showThanksThenMain();
+        showThanks();
       } else if(err.status === 403){
         alert('이벤트가 이미 마감됐어요. 페이지를 새로고침해주세요.');
         loadPublicState();
