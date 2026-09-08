@@ -142,9 +142,14 @@ const server = http.createServer(async (req, res) => {
         const cfg = await getConfig();
         const today = todayStrSeoul();
         const isOpen = !!(cfg && cfg.openDate === today);
+        let voted = false;
+        if (isOpen) {
+          voted = (await redis(["SISMEMBER", "afterglow:voters:" + cfg.openDate, voterId(req)])) === 1;
+        }
         return json(res, {
           today,
           isOpen,
+          voted,
           title: isOpen ? cfg.title : null,
           desc: isOpen ? cfg.desc : null,
           options: isOpen ? cfg.options : null,

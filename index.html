@@ -504,10 +504,6 @@
       }
       return;
     }
-    // 이미 이 투표(openDate)에 참여한 기기면 완료 화면 — 재투표 불가
-    var voted = false;
-    try { voted = localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
-    if(voted){ hideAll(); els.screenSubmitted.hidden = false; return; }
     hideAll();
     els.screenParticipant.hidden = false;
     els.partTitle.textContent = st.title || '';
@@ -540,6 +536,16 @@
     } else {
       els.partPollBlock.hidden = true;
       state.selectedOptionIdx = null;
+    }
+    // 이미 투표했으면(서버 기준, localStorage 보조) 제출 버튼 비활성화 — 재투표 방지
+    var hasVoted = !!st.voted;
+    try { hasVoted = hasVoted || localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
+    if(hasVoted){
+      els.submitBtn.disabled = true;
+      els.submitBtn.textContent = '이미 참여하셨어요';
+    } else {
+      els.submitBtn.disabled = false;
+      els.submitBtn.textContent = '제출하기';
     }
   }
 
