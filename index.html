@@ -250,6 +250,13 @@
   .reset-link{ font-size: .78rem; color: var(--ink-faint); background:none; border:none; cursor:pointer; text-decoration: underline; text-underline-offset: 3px; font-family: inherit; padding: 4px; }
   .reset-link:hover{ color: var(--danger); }
 
+  .voter-head{ font-size: .82rem; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
+  .voter-sub{ color: var(--ink-faint); font-weight: 400; font-size: .76rem; }
+  .voter-row{ display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 2px; border-bottom: 1px solid var(--divider); }
+  .voter-row:last-child{ border-bottom: none; }
+  .voter-row .vname{ font-size: .9rem; font-weight: 600; color: var(--ink); word-break: break-all; }
+  .voter-row .vchoice{ font-size: .84rem; color: var(--accent); font-weight: 600; flex-shrink: 0; }
+
   [hidden]{ display: none !important; }
 
   @media (max-width: 420px){
@@ -345,11 +352,29 @@
     <div id="pollResults"></div>
 
     <hr class="divider" />
+    <div class="voter-head">참여자 명단 <span class="voter-sub">운영자 전용 · 누가 무엇을 골랐는지</span></div>
+    <div id="voterList"></div>
+
+    <hr class="divider" />
     <div class="btn-row">
       <button class="btn btn-ghost" id="backToSettingsBtn">← 설정으로 돌아가기</button>
     </div>
     <div class="reset-row">
       <button class="reset-link" id="resetDataBtn">현재 투표 초기화 (되돌릴 수 없음)</button>
+    </div>
+  </div>
+
+  <!-- NAME ENTRY SCREEN -->
+  <div class="card center-card" id="screenName" hidden>
+    <span class="eyebrow">참여 전</span>
+    <h1>이름을 입력해주세요</h1>
+    <p class="sub">투표에 사용할 이름(닉네임)이에요.</p>
+    <div class="field" style="text-align:left; max-width:320px; margin:18px auto 0;">
+      <input type="text" id="nameInput" placeholder="예: 러너명 / 캐릭터명" maxlength="40" autocomplete="off" />
+      <p class="hint">※ 참여 내역(이름·선택)은 운영자가 결과에서 확인할 수 있어요.</p>
+    </div>
+    <div class="btn-row" style="justify-content:center; margin-top:6px;">
+      <button class="btn btn-primary" id="nameNextBtn">다음</button>
     </div>
   </div>
 
@@ -371,11 +396,11 @@
     <div class="submitted-box">
       <div class="check">✅</div>
       <h2>전달됐어요</h2>
-      <p>참여해주셔서 감사합니다. 익명으로 안전하게 저장됐어요.</p>
+      <p>참여해주셔서 감사합니다. 안전하게 저장됐어요.</p>
     </div>
   </div>
 
-  <p class="footnote">해당 투표는 익명으로 진행됩니다</p>
+  <p class="footnote">익명 투표 · 참여 내역은 운영자가 확인합니다</p>
 </div>
 
 <script>
@@ -409,6 +434,7 @@
     screenWaiting: document.getElementById('screenWaiting'),
     screenSettings: document.getElementById('screenSettings'),
     screenResults: document.getElementById('screenResults'),
+    screenName: document.getElementById('screenName'),
     screenParticipant: document.getElementById('screenParticipant'),
     screenSubmitted: document.getElementById('screenSubmitted'),
 
@@ -436,9 +462,12 @@
     resultsStatusText: document.getElementById('resultsStatusText'),
     resultsTitle: document.getElementById('resultsTitle'),
     pollResults: document.getElementById('pollResults'),
+    voterList: document.getElementById('voterList'),
     backToSettingsBtn: document.getElementById('backToSettingsBtn'),
     resetDataBtn: document.getElementById('resetDataBtn'),
 
+    nameInput: document.getElementById('nameInput'),
+    nameNextBtn: document.getElementById('nameNextBtn'),
     partTitle: document.getElementById('partTitle'),
     partDesc: document.getElementById('partDesc'),
     partPollBlock: document.getElementById('partPollBlock'),
@@ -451,6 +480,7 @@
     adminPassword: null,     // held in memory only after successful login
     publicState: null,       // last /api/state response
     selectedOptionIdx: null,
+    voterName: (function(){ try { return localStorage.getItem('afterglow-name') || ''; } catch(e){ return ''; } })(),
   };
 
   function hideAll(){
@@ -458,6 +488,7 @@
     els.screenWaiting.hidden = true;
     els.screenSettings.hidden = true;
     els.screenResults.hidden = true;
+    els.screenName.hidden = true;
     els.screenParticipant.hidden = true;
     els.screenSubmitted.hidden = true;
   }
@@ -504,6 +535,17 @@
       }
       return;
     }
+    // 이미 투표했나? (서버 기준 + localStorage 보조)
+    var already = !!st.voted;
+    try { already = already || localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
+    // 투표 전인데 이름을 아직 안 정했으면 → 진입(이름 입력) 화면
+    if(!already && !state.voterName){
+      hideAll();
+      els.screenName.hidden = false;
+      els.nameInput.value = state.voterName || '';
+      setTimeout(function(){ try { els.nameInput.focus(); } catch(e){} }, 30);
+      return;
+    }
     hideAll();
     els.screenParticipant.hidden = false;
     els.partTitle.textContent = st.title || '';
@@ -537,10 +579,8 @@
       els.partPollBlock.hidden = true;
       state.selectedOptionIdx = null;
     }
-    // 이미 투표했으면(서버 기준, localStorage 보조) 제출 버튼 비활성화 — 재투표 방지
-    var hasVoted = !!st.voted;
-    try { hasVoted = hasVoted || localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
-    if(hasVoted){
+    // 이미 투표했으면 제출 버튼 비활성화 — 재투표 방지
+    if(already){
       els.submitBtn.disabled = true;
       els.submitBtn.textContent = '이미 참여하셨어요';
     } else {
@@ -548,6 +588,16 @@
       els.submitBtn.textContent = '제출하기';
     }
   }
+
+  function goToVote(){
+    var v = els.nameInput.value.trim();
+    if(!v){ alert('이름을 입력해주세요.'); return; }
+    state.voterName = v.slice(0, 40);
+    try { localStorage.setItem('afterglow-name', state.voterName); } catch(e){}
+    renderParticipantView();
+  }
+  els.nameNextBtn.addEventListener('click', goToVote);
+  els.nameInput.addEventListener('keydown', function(e){ if(e.key === 'Enter') goToVote(); });
 
   function showThanks(){
     // 투표 완료 화면에 머묾 — 재투표 불가를 명확히
@@ -566,6 +616,8 @@
     try { already = localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
     if(already){ showThanks(); return; }
 
+    if(!state.voterName){ renderParticipantView(); return; } // 이름 먼저
+
     if(state.selectedOptionIdx === null){
       alert('선택지를 골라주세요.');
       return;
@@ -574,7 +626,7 @@
     els.submitBtn.disabled = true;
     els.submitBtn.textContent = '전달 중...';
 
-    api('submit', { optionIndex: state.selectedOptionIdx }).then(function(){
+    api('submit', { optionIndex: state.selectedOptionIdx, name: state.voterName }).then(function(){
       state.selectedOptionIdx = null;
       try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
       showThanks();
@@ -589,6 +641,10 @@
       } else if(err.status === 403){
         alert('이벤트가 이미 마감됐어요. 페이지를 새로고침해주세요.');
         loadPublicState();
+      } else if(err.data && err.data.error === 'name_required'){
+        state.voterName = '';
+        try { localStorage.removeItem('afterglow-name'); } catch(e){}
+        renderParticipantView();
       } else {
         alert('저장에 실패했어요. 다시 시도해주세요.');
       }
@@ -815,6 +871,7 @@
     var cfg = lastResults.config;
     var opts = (cfg && cfg.options) ? cfg.options.filter(function(o){return o && o.trim();}) : [];
     els.pollResults.innerHTML = '';
+    els.voterList.innerHTML = '';
     if(opts.length === 0){
       els.pollResults.innerHTML = '<div class="empty-state">이 이벤트는 투표 선택지가 없어요.</div>';
       return;
@@ -836,6 +893,22 @@
     totalEl.className = 'total-votes';
     totalEl.textContent = '총 ' + total + '표';
     els.pollResults.appendChild(totalEl);
+
+    // 참여자 명단 (운영자 전용): 누가 무엇을 골랐는지
+    var voters = lastResults.voters || [];
+    if(!voters.length){
+      els.voterList.innerHTML = '<div class="empty-state" style="padding:16px;">아직 참여자가 없어요.</div>';
+    } else {
+      voters.forEach(function(v){
+        var choice = (opts[v.optionIndex] !== undefined) ? opts[v.optionIndex] : '(삭제된 선택지)';
+        var row = document.createElement('div');
+        row.className = 'voter-row';
+        row.innerHTML = '<span class="vname"></span><span class="vchoice"></span>';
+        row.querySelector('.vname').textContent = v.name || '(이름없음)';
+        row.querySelector('.vchoice').textContent = choice;
+        els.voterList.appendChild(row);
+      });
+    }
   }
 
   hideAll();

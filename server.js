@@ -16,7 +16,9 @@ const INDEX_FILE = path.join(__dirname, "index.html");
 const REST_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const K_CONFIG = "afterglow:config";
-const K_VOTES = "afterglow:votes"; // redis hash: field = optionIndex, value = count
+// 투표 기록: 투표(날짜)별 해시. field = 투표자 지문, value = JSON {name, optionIndex, ts}
+// 한 지문당 한 표(HSETNX) → 중복 차단 + 누가 뭘 골랐는지 함께 저장(운영자 확인용).
+function ballotsKey(openDate) { return "afterglow:ballots:" + openDate; }
 
 async function redis(cmd) {
   const res = await fetch(REST_URL, {
@@ -36,25 +38,22 @@ async function setConfig(cfg) {
   // ponytail: last-writer-wins on config — fine, only the single admin writes it
   await redis(["SET", K_CONFIG, JSON.stringify(cfg)]);
 }
-async function addVote(i) {
-  await redis(["HINCRBY", K_VOTES, String(i), 1]); // atomic
-}
-async function getCounts() {
-  const flat = (await redis(["HGETALL", K_VOTES])) || []; // ["0","3","2","5",...]
-  const counts = {};
-  for (let j = 0; j < flat.length; j += 2) counts[flat[j]] = Number(flat[j + 1]);
-  return counts;
+async function getBallots(openDate) {
+  const flat = (await redis(["HGETALL", ballotsKey(openDate)])) || []; // [vid, json, vid, json, ...]
+  const list = [];
+  for (let j = 1; j < flat.length; j += 2) {
+    try { list.push(JSON.parse(flat[j])); } catch {}
+  }
+  return list;
 }
 async function resetVotes() {
-  await redis(["DEL", K_VOTES]);
   const cfg = await getConfig();
-  if (cfg && cfg.openDate) await redis(["DEL", "afterglow:voters:" + cfg.openDate]);
+  if (cfg && cfg.openDate) await redis(["DEL", ballotsKey(cfg.openDate)]);
 }
 async function deleteAll() {
   const cfg = await getConfig();
-  if (cfg && cfg.openDate) await redis(["DEL", "afterglow:voters:" + cfg.openDate]);
+  if (cfg && cfg.openDate) await redis(["DEL", ballotsKey(cfg.openDate)]);
   await redis(["DEL", K_CONFIG]);
-  await redis(["DEL", K_VOTES]);
 }
 
 function json(res, data, status = 200) {
@@ -100,10 +99,14 @@ function readBody(req) {
 
 // ---- self-check: `node server.js --selftest` ----
 if (process.argv.includes("--selftest")) {
-  const flat = ["0", "3", "2", "5"];
+  // ballots HGETALL: [vid, json, ...] → 이름목록 + 집계
+  const flat = ["a", JSON.stringify({ name: "철수", optionIndex: 0 }), "b", JSON.stringify({ name: "영희", optionIndex: 1 }), "c", JSON.stringify({ name: "민수", optionIndex: 0 })];
+  const list = [];
+  for (let j = 1; j < flat.length; j += 2) list.push(JSON.parse(flat[j]));
   const counts = {};
-  for (let j = 0; j < flat.length; j += 2) counts[flat[j]] = Number(flat[j + 1]);
-  console.assert(counts["0"] === 3 && counts["2"] === 5, "HGETALL parse");
+  for (const b of list) counts[b.optionIndex] = (counts[b.optionIndex] || 0) + 1;
+  console.assert(list.length === 3 && counts[0] === 2 && counts[1] === 1, "ballots parse");
+  console.assert(list[0].name === "철수", "ballot name");
   const today = todayStrSeoul();
   console.assert(/^\d{4}-\d{2}-\d{2}$/.test(today), "seoul date format");
   const v1 = voterId({ headers: { "x-forwarded-for": "1.2.3.4", "user-agent": "A" }, socket: {} });
@@ -144,7 +147,7 @@ const server = http.createServer(async (req, res) => {
         const isOpen = !!(cfg && cfg.openDate === today);
         let voted = false;
         if (isOpen) {
-          voted = (await redis(["SISMEMBER", "afterglow:voters:" + cfg.openDate, voterId(req)])) === 1;
+          voted = (await redis(["HEXISTS", ballotsKey(cfg.openDate), voterId(req)])) === 1;
         }
         return json(res, {
           today,
@@ -163,6 +166,8 @@ const server = http.createServer(async (req, res) => {
         const cfg = await getConfig();
         const today = todayStrSeoul();
         if (!cfg || cfg.openDate !== today) return json(res, { error: "not_open" }, 403);
+        const name = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
+        if (!name) return json(res, { error: "name_required" }, 400);
         if (
           typeof body.optionIndex !== "number" ||
           !Array.isArray(cfg.options) ||
@@ -171,10 +176,10 @@ const server = http.createServer(async (req, res) => {
         ) {
           return json(res, { error: "invalid_option" }, 400);
         }
-        // 중복투표 방지: 같은 IP+브라우저는 이 투표에 1회만 집계 (SADD는 원자적)
-        const fresh = await redis(["SADD", "afterglow:voters:" + cfg.openDate, voterId(req)]);
+        // 한 지문당 1표(HSETNX = 원자적). 이름·선택을 함께 저장 → 운영자가 확인.
+        const ballot = JSON.stringify({ name: name, optionIndex: body.optionIndex, ts: Date.now() });
+        const fresh = await redis(["HSETNX", ballotsKey(cfg.openDate), voterId(req), ballot]);
         if (fresh === 0) return json(res, { error: "already_voted" }, 409);
-        await addVote(body.optionIndex);
         return json(res, { ok: true });
       }
 
@@ -213,10 +218,15 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         if (body.password !== ADMIN_PASSWORD) return json(res, { error: "unauthorized" }, 401);
         const cfg = await getConfig();
-        const counts = await getCounts();
-        let total = 0;
-        for (const k in counts) total += counts[k];
-        return json(res, { config: cfg, today: todayStrSeoul(), counts, totalVotes: total });
+        const ballots = cfg && cfg.openDate ? await getBallots(cfg.openDate) : [];
+        const counts = {};
+        for (const b of ballots) counts[b.optionIndex] = (counts[b.optionIndex] || 0) + 1;
+        // 운영자에게 "누가 뭘 골랐는지" 명단 제공 (최신순)
+        const voters = ballots
+          .slice()
+          .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+          .map((b) => ({ name: b.name, optionIndex: b.optionIndex }));
+        return json(res, { config: cfg, today: todayStrSeoul(), counts, totalVotes: ballots.length, voters });
       }
 
       if (method === "POST" && apiPath === "admin/reset") {
