@@ -444,7 +444,6 @@
     partPollBlock: document.getElementById('partPollBlock'),
     partPollOptions: document.getElementById('partPollOptions'),
     submitBtn: document.getElementById('submitBtn'),
-    submitAnotherBtn: document.getElementById('submitAnotherBtn'),
   };
 
   var state = {
@@ -505,6 +504,14 @@
       }
       return;
     }
+    // 이미 이 투표(openDate)에 참여했으면 확인 화면 유지 — 중복투표 방지
+    var voted = false;
+    try { voted = localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
+    if(voted){
+      hideAll();
+      els.screenSubmitted.hidden = false;
+      return;
+    }
     hideAll();
     els.screenParticipant.hidden = false;
     els.partTitle.textContent = st.title || '';
@@ -554,22 +561,25 @@
 
     api('submit', { optionIndex: state.selectedOptionIdx }).then(function(){
       state.selectedOptionIdx = null;
-      hideAll();
-      els.screenSubmitted.hidden = false;
+      // 이 브라우저는 이 투표(openDate)에 참여 완료로 기록 — 중복투표 방지
+      try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
+      // 3초 딜레이 후 확인 화면으로 전환하고 그대로 유지 (재투표 없음)
       setTimeout(function(){
-        loadPublicState();
-      }, 1500);
+        hideAll();
+        els.screenSubmitted.hidden = false;
+        els.submitBtn.disabled = false;
+        els.submitBtn.textContent = '제출하기';
+      }, 3000);
     }).catch(function(err){
       console.error(err);
+      els.submitBtn.disabled = false;
+      els.submitBtn.textContent = '제출하기';
       if(err.status === 403){
         alert('이벤트가 이미 마감됐어요. 페이지를 새로고침해주세요.');
         loadPublicState();
       } else {
         alert('저장에 실패했어요. 다시 시도해주세요.');
       }
-    }).finally(function(){
-      els.submitBtn.disabled = false;
-      els.submitBtn.textContent = '제출하기';
     });
   });
 
