@@ -367,11 +367,11 @@
   <!-- NAME ENTRY SCREEN -->
   <div class="card center-card" id="screenName" hidden>
     <span class="eyebrow">참여 전</span>
-    <h1>이름을 입력해주세요</h1>
-    <p class="sub">투표에 사용할 이름(닉네임)이에요.</p>
+    <h1>캐릭터 이름을 입력해주세요</h1>
+    <p class="sub">투표에 사용할 캐릭터 이름이에요.</p>
     <div class="field" style="text-align:left; max-width:320px; margin:18px auto 0;">
-      <input type="text" id="nameInput" placeholder="예: 러너명 / 캐릭터명" maxlength="40" autocomplete="off" />
-      <p class="hint">※ 참여 내역(이름·선택)은 운영자가 결과에서 확인할 수 있어요.</p>
+      <input type="text" id="nameInput" placeholder="예: 캐릭터 이름" maxlength="40" autocomplete="off" />
+      <p class="hint">※ 참여 내역(캐릭터 이름·선택)은 운영자가 결과에서 확인할 수 있어요.</p>
     </div>
     <div class="btn-row" style="justify-content:center; margin-top:6px;">
       <button class="btn btn-primary" id="nameNextBtn">다음</button>
@@ -590,7 +590,7 @@
 
   function goToVote(){
     var v = els.nameInput.value.trim();
-    if(!v){ alert('이름을 입력해주세요.'); return; }
+    if(!v){ alert('캐릭터 이름을 입력해주세요.'); return; }
     state.voterName = v.slice(0, 40);
     try { localStorage.setItem('afterglow-name', state.voterName); } catch(e){}
     renderParticipantView();
