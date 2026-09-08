@@ -504,14 +504,6 @@
       }
       return;
     }
-    // 이미 이 투표(openDate)에 참여했으면 확인 화면 유지 — 중복투표 방지
-    var voted = false;
-    try { voted = localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
-    if(voted){
-      hideAll();
-      els.screenSubmitted.hidden = false;
-      return;
-    }
     hideAll();
     els.screenParticipant.hidden = false;
     els.partTitle.textContent = st.title || '';
@@ -547,9 +539,22 @@
     }
   }
 
+  function showThanksThenMain(){
+    hideAll();
+    els.screenSubmitted.hidden = false;
+    els.submitBtn.disabled = false;
+    els.submitBtn.textContent = '제출하기';
+    setTimeout(function(){ loadPublicState(); }, 1800); // 잠깐 보여준 뒤 메인으로
+  }
+
   els.submitBtn.addEventListener('click', function(){
     var st = state.publicState;
     if(!st || !st.isOpen) return;
+
+    // 이미 참여한 기기면 재투표 막고 확인 화면 (서버 왕복 없이 즉시)
+    var already = false;
+    try { already = localStorage.getItem('afterglow-voted-' + st.openDate) === '1'; } catch(e){}
+    if(already){ showThanksThenMain(); return; }
 
     if(state.selectedOptionIdx === null){
       alert('선택지를 골라주세요.');
@@ -561,24 +566,16 @@
 
     api('submit', { optionIndex: state.selectedOptionIdx }).then(function(){
       state.selectedOptionIdx = null;
-      // 이 브라우저는 이 투표(openDate)에 참여 완료로 기록 — 중복투표 방지
       try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
-      // 3초 딜레이 후 확인 화면으로 전환하고 그대로 유지 (재투표 없음)
-      setTimeout(function(){
-        hideAll();
-        els.screenSubmitted.hidden = false;
-        els.submitBtn.disabled = false;
-        els.submitBtn.textContent = '제출하기';
-      }, 3000);
+      showThanksThenMain();
     }).catch(function(err){
       console.error(err);
       els.submitBtn.disabled = false;
       els.submitBtn.textContent = '제출하기';
       if(err.status === 409){
-        // 이미 참여한 기기 — 확인 화면으로 (중복투표 차단)
+        // 이미 참여한 기기 — 확인 화면 잠깐 뒤 메인으로 (중복투표 차단)
         try { localStorage.setItem('afterglow-voted-' + st.openDate, '1'); } catch(e){}
-        hideAll();
-        els.screenSubmitted.hidden = false;
+        showThanksThenMain();
       } else if(err.status === 403){
         alert('이벤트가 이미 마감됐어요. 페이지를 새로고침해주세요.');
         loadPublicState();
