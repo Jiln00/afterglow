@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AFTERGLOW</title>
+<meta name="description" content="운영자가 지정한 날짜에만 열리는 익명 투표 이벤트 페이지">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌇</text></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;600;700&family=Nanum+Myeongjo:wght@700;800&family=Pretendard:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #f8f5ec;
+    --bg-soft: #eee7d6;
+    --card: #fdfbf6;
+    --card-border: #e4dcc9;
+    --ink: #2b2621;
+    --ink-soft: #6b6255;
+    --ink-faint: #9a9082;
+    --accent: #2f6690;
+    --accent-dark: #6fa6c4;
+    --accent-soft: #cfe6ef;
+    --accent-ink: #fdfbf6;
+    --divider: #e4dcc9;
+    --input-bg: #faf7f0;
+    --input-border: #ddd3bd;
+    --shadow: 0 1px 2px rgba(43,38,33,.04), 0 8px 24px -12px rgba(43,38,33,.18);
+    --danger: #a8433a;
+    --focus: #2f6690;
+    color-scheme: light;
+  }
+
+  :root[data-theme="dark"]{
+    --bg: #241d1c;
+    --bg-soft: #1c1716;
+    --card: #2c2422;
+    --card-border: #3d322e;
+    --ink: #f1e8de;
+    --ink-soft: #bcab9c;
+    --ink-faint: #8a7a6c;
+    --accent: #6fa6c4;
+    --accent-dark: #2f6690;
+    --accent-soft: #24384a;
+    --accent-ink: #241d1c;
+    --divider: #3d322e;
+    --input-bg: #241d1c;
+    --input-border: #4a3d37;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    --danger: #e08573;
+    --focus: #6fa6c4;
+    color-scheme: dark;
+  }
+
+  *{ box-sizing: border-box; }
+  html{ text-size-adjust: 100%; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 0 0 64px;
+  }
+  ::selection{ background: var(--accent-soft); }
+
+  .shell{ width: 100%; max-width: 640px; padding: 28px 20px 0; }
+
+  .topbar{
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 4px 22px;
+  }
+  .logo{
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', serif;
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .logo .after{ color: var(--ink); }
+  .logo .glow{ color: var(--accent); }
+
+  .gear-btn{
+    width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: color .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  .gear-btn:hover{ color: var(--accent); border-color: var(--accent); }
+  .gear-btn:active{ transform: scale(.94); }
+  .gear-btn svg{ width: 18px; height: 18px; }
+
+  .topbar-actions{ display: flex; align-items: center; gap: 8px; }
+  .theme-btn{
+    width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--ink-soft);
+    cursor: pointer;
+    font-size: 17px; line-height: 1;
+    transition: color .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  .theme-btn:hover{ color: var(--accent); border-color: var(--accent); }
+  .theme-btn:active{ transform: scale(.94); }
+
+  .card{
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 34px 30px 30px;
+  }
+
+  h1{ font-family: 'Noto Serif KR', serif; font-size: 1.3rem; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .sub{ color: var(--ink-soft); font-size: .88rem; line-height: 1.6; margin: 0; }
+
+  .divider{ height: 1px; background: var(--divider); margin: 22px 0; border: none; }
+
+  label{ display:block; font-size: .82rem; font-weight: 600; color: var(--ink); margin-bottom: 7px; }
+  .field{ margin-bottom: 20px; }
+  .hint{ font-size: .78rem; color: var(--ink-faint); margin-top: 6px; line-height: 1.5; }
+
+  input[type=text], input[type=date], input[type=password], textarea{
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 10px;
+    padding: 12px 13px;
+    font-size: .93rem;
+    color: var(--ink);
+    font-family: inherit;
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  input::placeholder, textarea::placeholder{ color: var(--ink-faint); }
+  input:focus, textarea:focus{
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px rgba(168,67,58,.18);
+  }
+  textarea{ resize: vertical; min-height: 84px; line-height: 1.55; }
+
+  .option-row{ display: flex; gap: 8px; margin-bottom: 10px; }
+  .option-row input{ flex: 1; }
+  .icon-btn{
+    flex-shrink: 0; width: 42px; height: 42px; border-radius: 10px;
+    background: var(--input-bg); border: 1px solid var(--input-border);
+    color: var(--ink-faint); cursor: pointer; display:flex; align-items:center; justify-content:center;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .icon-btn:hover{ color: var(--danger); border-color: var(--danger); }
+  .icon-btn svg{ width: 15px; height: 15px; }
+
+  .add-option{
+    width: 100%; padding: 11px; border-radius: 10px;
+    background: transparent; border: 1px dashed var(--input-border);
+    color: var(--ink-soft); font-size: .87rem; font-weight: 600; cursor: pointer;
+    margin-bottom: 24px;
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .add-option:hover{ border-color: var(--accent); color: var(--accent); }
+
+  .btn-row{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn{
+    border: none; border-radius: 10px; padding: 12px 20px;
+    font-size: .9rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    transition: filter .15s ease, transform .15s ease, background .15s ease;
+  }
+  .btn:active{ transform: scale(.98); }
+  .btn-primary{ background: var(--accent); color: var(--accent-ink); }
+  .btn-primary:hover{ filter: brightness(1.08); }
+  .btn-primary:disabled{ opacity: .5; cursor: not-allowed; filter: none; }
+  .btn-ghost{ background: var(--bg-soft); color: var(--ink); border: 1px solid var(--card-border); }
+  .btn-ghost:hover{ background: var(--divider); }
+  .btn-text{ background: none; color: var(--ink-soft); padding: 12px 10px; text-decoration: underline; text-underline-offset: 3px; }
+  .btn-text:hover{ color: var(--accent); }
+
+  .footnote{ text-align: center; font-size: .76rem; color: var(--ink-faint); margin-top: 22px; letter-spacing: 0.01em; }
+
+  .center-card{ text-align: center; padding: 44px 30px 38px; }
+  .lock-emoji{ font-size: 2.1rem; margin-bottom: 14px; }
+  .center-card h1{ font-size: 1.35rem; margin-bottom: 8px; }
+  .center-card .sub{ margin-bottom: 26px; }
+  .center-card .btn-row{ justify-content: center; }
+  .err-msg{ color: var(--danger); font-size: .82rem; margin-top: 10px; min-height: 1.2em; }
+
+  .eyebrow{
+    display:inline-block; font-size: .74rem; font-weight: 700; letter-spacing: .06em;
+    color: var(--accent); text-transform: uppercase; margin-bottom: 10px;
+  }
+  .waiting-icon{ font-size: 1.9rem; margin-bottom: 6px; }
+
+  .p-title{ font-family: 'Noto Serif KR', serif; font-size: 1.45rem; font-weight: 700; line-height: 1.4; margin: 0 0 10px; letter-spacing: -0.01em; }
+  .p-desc{ color: var(--ink-soft); font-size: .92rem; line-height: 1.65; margin: 0 0 26px; white-space: pre-wrap; }
+
+  .poll-option{
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; text-align: left;
+    padding: 14px 16px; border-radius: 12px;
+    border: 1.5px solid var(--input-border);
+    background: var(--input-bg);
+    cursor: pointer; margin-bottom: 10px;
+    font-family: inherit; font-size: .94rem; color: var(--ink); font-weight: 500;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .poll-option:hover{ border-color: var(--accent); }
+  .poll-option.selected{ border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+  .poll-option .dot{
+    width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--input-border);
+    flex-shrink: 0; position: relative;
+  }
+  .poll-option.selected .dot{ border-color: var(--accent); }
+  .poll-option.selected .dot::after{
+    content:''; position:absolute; inset: 3px; border-radius: 50%; background: var(--accent);
+  }
+
+  .submitted-box{ text-align: center; padding: 30px 10px 6px; }
+  .submitted-box .check{ font-size: 2rem; margin-bottom: 10px; }
+  .submitted-box h2{ font-family: 'Noto Serif KR', serif; font-size: 1.15rem; margin: 0 0 8px; }
+  .submitted-box p{ color: var(--ink-soft); font-size: .88rem; margin: 0; }
+
+  .result-row{ margin-bottom: 16px; }
+  .result-head{ display:flex; justify-content: space-between; font-size: .88rem; font-weight: 600; margin-bottom: 7px; }
+  .result-head .count{ color: var(--ink-soft); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bar-track{ height: 10px; border-radius: 6px; background: var(--bg-soft); overflow: hidden; }
+  .bar-fill{ height: 100%; background: var(--accent); border-radius: 6px; transition: width .4s ease; }
+  .total-votes{ font-size: .78rem; color: var(--ink-faint); margin-top: 4px; text-align: right; }
+
+  .empty-state{ text-align: center; padding: 34px 10px; color: var(--ink-faint); font-size: .86rem; }
+
+  .admin-topbar{ display:flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .admin-topbar h1{ margin: 0; }
+  .logout-link{ font-size: .8rem; color: var(--ink-faint); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; background:none; border:none; font-family:inherit; padding: 4px; }
+  .logout-link:hover{ color: var(--accent); }
+
+  .status-pill{
+    display:inline-flex; align-items:center; gap: 6px;
+    font-size: .74rem; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+    margin-bottom: 18px;
+  }
+  .status-pill.live{ background: var(--accent-soft); color: var(--accent); }
+  .status-pill.upcoming{ background: var(--bg-soft); color: var(--ink-soft); }
+  .status-pill .dot2{ width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .reset-row{ margin-top: 18px; }
+  .reset-link{ font-size: .78rem; color: var(--ink-faint); background:none; border:none; cursor:pointer; text-decoration: underline; text-underline-offset: 3px; font-family: inherit; padding: 4px; }
+  .reset-link:hover{ color: var(--danger); }
+
+  [hidden]{ display: none !important; }
+
+  @media (max-width: 420px){
+    .shell{ padding: 20px 14px 0; }
+    .card{ padding: 26px 20px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <div class="topbar">
+    <p class="logo"><span class="after">AFTER</span><span class="glow">GLOW</span></p>
+    <div class="topbar-actions">
+      <button class="theme-btn" id="themeBtn" title="라이트/다크 모드" aria-label="라이트/다크 모드">🌙</button>
+      <button class="gear-btn" id="gearBtn" title="운영자 설정" aria-label="운영자 설정">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- LOCK SCREEN -->
+  <div class="card center-card" id="screenLock" hidden>
+    <div class="lock-emoji">🔒</div>
+    <h1>운영자 로그인</h1>
+    <p class="sub">패스워드를 입력하면 이벤트 날짜·질문·선택지를 바꾸고 결과를 볼 수 있어요.</p>
+    <div class="field" style="text-align:left; max-width: 320px; margin: 0 auto;">
+      <input type="password" id="pwInput" placeholder="패스워드" autocomplete="off" />
+      <p class="err-msg" id="pwErr"></p>
+    </div>
+    <div class="btn-row" style="justify-content:center; margin-top: 6px;">
+      <button class="btn btn-primary" id="loginBtn">로그인</button>
+      <button class="btn btn-text" id="lockCancelBtn">취소</button>
+    </div>
+  </div>
+
+  <!-- WAITING SCREEN -->
+  <div class="card center-card" id="screenWaiting" hidden>
+    <div class="waiting-icon">⏳</div>
+    <span class="eyebrow">아직 준비 중</span>
+    <h1>열리는 날을 기다려주세요</h1>
+    <p class="sub" id="waitingSub">운영자가 아직 이벤트를 설정하지 않았어요.</p>
+  </div>
+
+  <!-- ADMIN SETTINGS SCREEN -->
+  <div class="card" id="screenSettings" hidden>
+    <div class="admin-topbar">
+      <h1>이벤트 설정</h1>
+      <button class="logout-link" id="logoutBtn">로그아웃</button>
+    </div>
+    <button class="reset-link" id="deletePollBtn">투표 초기화 (되돌릴 수 없음)</button>
+    <hr class="divider" />
+
+    <div class="field">
+      <label for="dateInput">열리는 날짜</label>
+      <input type="date" id="dateInput" />
+      <p class="hint" id="todayHint">이 날짜에만 참여자 화면이 열립니다. 오늘 날짜: </p>
+    </div>
+
+    <div class="field">
+      <label for="titleInput">질문 / 제목</label>
+      <input type="text" id="titleInput" placeholder="예: 오늘 회식 장소 어디로 갈까요?" maxlength="120" />
+    </div>
+
+    <div class="field">
+      <label for="descInput">설명 (선택)</label>
+      <input type="text" id="descInput" placeholder="참여자에게 보여줄 짧은 설명" maxlength="200" />
+    </div>
+
+    <div class="field">
+      <label>투표 선택지 (최소 2개)</label>
+      <div id="optionsList"></div>
+      <button class="add-option" id="addOptionBtn" type="button">+ 선택지 추가</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveBtn">저장하기</button>
+      <button class="btn btn-ghost" id="cancelBtn">취소</button>
+      <button class="btn btn-text" id="viewResultsBtn" style="margin-left:auto;">결과 보기 →</button>
+    </div>
+  </div>
+
+  <!-- ADMIN RESULTS SCREEN -->
+  <div class="card" id="screenResults" hidden>
+    <div class="admin-topbar">
+      <h1>결과 보기</h1>
+      <button class="logout-link" id="logoutBtn2">로그아웃</button>
+    </div>
+    <span class="status-pill" id="resultsStatusPill"><span class="dot2"></span><span id="resultsStatusText"></span></span>
+    <p class="p-title" id="resultsTitle" style="font-size:1.1rem;"></p>
+    <hr class="divider" />
+
+    <div id="pollResults"></div>
+
+    <hr class="divider" />
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="backToSettingsBtn">← 설정으로 돌아가기</button>
+    </div>
+    <div class="reset-row">
+      <button class="reset-link" id="resetDataBtn">현재 투표 초기화 (되돌릴 수 없음)</button>
+    </div>
+  </div>
+
+  <!-- PARTICIPANT SCREEN -->
+  <div class="card" id="screenParticipant" hidden>
+    <span class="eyebrow">익명 참여</span>
+    <p class="p-title" id="partTitle"></p>
+    <p class="p-desc" id="partDesc" hidden></p>
+
+    <div id="partPollBlock" hidden>
+      <div id="partPollOptions"></div>
+    </div>
+
+    <button class="btn btn-primary" id="submitBtn" style="width:100%; padding: 13px;">제출하기</button>
+  </div>
+
+  <!-- SUBMITTED SCREEN -->
+  <div class="card" id="screenSubmitted" hidden>
+    <div class="submitted-box">
+      <div class="check">✅</div>
+      <h2>전달됐어요</h2>
+      <p>참여해주셔서 감사합니다. 익명으로 안전하게 저장됐어요.</p>
+    </div>
+  </div>
+
+  <p class="footnote">해당 투표는 익명으로 진행됩니다</p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  (function(){
+    var themeBtn = document.getElementById('themeBtn');
+    var saved = localStorage.getItem('afterglow-theme');
+    function applyTheme(theme){
+      if(theme === 'dark'){
+        document.documentElement.setAttribute('data-theme', 'dark');
+        themeBtn.textContent = '☀️';
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+        themeBtn.textContent = '🌙';
+      }
+    }
+    applyTheme(saved === 'dark' ? 'dark' : 'light');
+    themeBtn.addEventListener('click', function(){
+      var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      var next = isDark ? 'light' : 'dark';
+      localStorage.setItem('afterglow-theme', next);
+      applyTheme(next);
+    });
+  })();
+
+  var els = {
+    gearBtn: document.getElementById('gearBtn'),
+    screenLock: document.getElementById('screenLock'),
+    screenWaiting: document.getElementById('screenWaiting'),
+    screenSettings: document.getElementById('screenSettings'),
+    screenResults: document.getElementById('screenResults'),
+    screenParticipant: document.getElementById('screenParticipant'),
+    screenSubmitted: document.getElementById('screenSubmitted'),
+
+    pwInput: document.getElementById('pwInput'),
+    pwErr: document.getElementById('pwErr'),
+    loginBtn: document.getElementById('loginBtn'),
+    lockCancelBtn: document.getElementById('lockCancelBtn'),
+
+    waitingSub: document.getElementById('waitingSub'),
+
+    dateInput: document.getElementById('dateInput'),
+    todayHint: document.getElementById('todayHint'),
+    titleInput: document.getElementById('titleInput'),
+    descInput: document.getElementById('descInput'),
+    optionsList: document.getElementById('optionsList'),
+    addOptionBtn: document.getElementById('addOptionBtn'),
+    saveBtn: document.getElementById('saveBtn'),
+    cancelBtn: document.getElementById('cancelBtn'),
+    viewResultsBtn: document.getElementById('viewResultsBtn'),
+    deletePollBtn: document.getElementById('deletePollBtn'),
+    logoutBtn: document.getElementById('logoutBtn'),
+    logoutBtn2: document.getElementById('logoutBtn2'),
+
+    resultsStatusPill: document.getElementById('resultsStatusPill'),
+    resultsStatusText: document.getElementById('resultsStatusText'),
+    resultsTitle: document.getElementById('resultsTitle'),
+    pollResults: document.getElementById('pollResults'),
+    backToSettingsBtn: document.getElementById('backToSettingsBtn'),
+    resetDataBtn: document.getElementById('resetDataBtn'),
+
+    partTitle: document.getElementById('partTitle'),
+    partDesc: document.getElementById('partDesc'),
+    partPollBlock: document.getElementById('partPollBlock'),
+    partPollOptions: document.getElementById('partPollOptions'),
+    submitBtn: document.getElementById('submitBtn'),
+    submitAnotherBtn: document.getElementById('submitAnotherBtn'),
+  };
+
+  var state = {
+    isAdmin: false,
+    adminPassword: null,     // held in memory only after successful login
+    publicState: null,       // last /api/state response
+    selectedOptionIdx: null,
+  };
+
+  function hideAll(){
+    els.screenLock.hidden = true;
+    els.screenWaiting.hidden = true;
+    els.screenSettings.hidden = true;
+    els.screenResults.hidden = true;
+    els.screenParticipant.hidden = true;
+    els.screenSubmitted.hidden = true;
+  }
+
+  function api(path, body){
+    return fetch('/api/' + path, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }).then(function(res){
+      return res.json().then(function(data){
+        if(!res.ok){
+          var err = new Error(data && data.error ? data.error : 'request_failed');
+          err.status = res.status;
+          err.data = data;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  // ---------- participant / waiting ----------
+  function loadPublicState(){
+    return api('state').then(function(data){
+      state.publicState = data;
+      renderParticipantView();
+      return data;
+    }).catch(function(err){
+      console.error('state load failed', err);
+    });
+  }
+
+  function renderParticipantView(){
+    var st = state.publicState;
+    if(!st) return;
+    if(!st.isOpen){
+      hideAll();
+      els.screenWaiting.hidden = false;
+      if(!st.configured){
+        els.waitingSub.textContent = '운영자가 아직 이벤트를 설정하지 않았어요.';
+      } else {
+        els.waitingSub.textContent = '열리는 날: ' + st.openDate;
+      }
+      return;
+    }
+    hideAll();
+    els.screenParticipant.hidden = false;
+    els.partTitle.textContent = st.title || '';
+    if(st.desc && st.desc.trim()){
+      els.partDesc.hidden = false;
+      els.partDesc.textContent = st.desc;
+    } else {
+      els.partDesc.hidden = true;
+    }
+
+    var opts = (st.options || []).filter(function(o){ return o && o.trim(); });
+    if(opts.length >= 1){
+      els.partPollBlock.hidden = false;
+      els.partPollOptions.innerHTML = '';
+      state.selectedOptionIdx = null;
+      opts.forEach(function(opt, idx){
+        var btn = document.createElement('button');
+        btn.className = 'poll-option';
+        btn.type = 'button';
+        btn.innerHTML = '<span class="dot"></span><span></span>';
+        btn.querySelector('span:last-child').textContent = opt;
+        btn.addEventListener('click', function(){
+          state.selectedOptionIdx = idx;
+          Array.prototype.forEach.call(els.partPollOptions.children, function(c, i){
+            c.classList.toggle('selected', i === idx);
+          });
+        });
+        els.partPollOptions.appendChild(btn);
+      });
+    } else {
+      els.partPollBlock.hidden = true;
+      state.selectedOptionIdx = null;
+    }
+  }
+
+  els.submitBtn.addEventListener('click', function(){
+    var st = state.publicState;
+    if(!st || !st.isOpen) return;
+
+    if(state.selectedOptionIdx === null){
+      alert('선택지를 골라주세요.');
+      return;
+    }
+
+    els.submitBtn.disabled = true;
+    els.submitBtn.textContent = '전달 중...';
+
+    api('submit', { optionIndex: state.selectedOptionIdx }).then(function(){
+      state.selectedOptionIdx = null;
+      hideAll();
+      els.screenSubmitted.hidden = false;
+      setTimeout(function(){
+        loadPublicState();
+      }, 1500);
+    }).catch(function(err){
+      console.error(err);
+      if(err.status === 403){
+        alert('이벤트가 이미 마감됐어요. 페이지를 새로고침해주세요.');
+        loadPublicState();
+      } else {
+        alert('저장에 실패했어요. 다시 시도해주세요.');
+      }
+    }).finally(function(){
+      els.submitBtn.disabled = false;
+      els.submitBtn.textContent = '제출하기';
+    });
+  });
+
+  // ---------- lock screen ----------
+  function showLock(){
+    hideAll();
+    els.screenLock.hidden = false;
+    els.pwErr.textContent = '';
+    els.pwInput.value = '';
+    setTimeout(function(){ els.pwInput.focus(); }, 30);
+  }
+
+  els.gearBtn.addEventListener('click', function(){
+    if(state.isAdmin){
+      showSettings();
+    } else {
+      showLock();
+    }
+  });
+
+  els.lockCancelBtn.addEventListener('click', function(){
+    hideAll();
+    renderParticipantView();
+  });
+
+  function attemptLogin(){
+    var val = els.pwInput.value;
+    if(!val){ return; }
+    els.loginBtn.disabled = true;
+    api('admin/login', { password: val }).then(function(){
+      state.isAdmin = true;
+      state.adminPassword = val;
+      els.pwErr.textContent = '';
+      showSettings();
+    }).catch(function(){
+      els.pwErr.textContent = '패스워드가 올바르지 않아요.';
+    }).finally(function(){
+      els.loginBtn.disabled = false;
+    });
+  }
+  els.loginBtn.addEventListener('click', attemptLogin);
+  els.pwInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter') attemptLogin();
+  });
+
+  function doLogout(){
+    state.isAdmin = false;
+    state.adminPassword = null;
+    hideAll();
+    loadPublicState();
+  }
+  els.logoutBtn.addEventListener('click', doLogout);
+  els.logoutBtn2.addEventListener('click', doLogout);
+
+  // ---------- admin: settings ----------
+  function optionRowEl(value){
+    var row = document.createElement('div');
+    row.className = 'option-row';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = value || '';
+    input.placeholder = '선택지 ' + (els.optionsList.children.length + 1);
+    input.maxLength = 60;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-btn';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    btn.addEventListener('click', function(){
+      row.remove();
+      renumberPlaceholders();
+    });
+    row.appendChild(input);
+    row.appendChild(btn);
+    return row;
+  }
+
+  function renumberPlaceholders(){
+    Array.prototype.forEach.call(els.optionsList.children, function(row, i){
+      var inp = row.querySelector('input');
+      if(!inp.value) inp.placeholder = '선택지 ' + (i+1);
+    });
+  }
+
+  els.addOptionBtn.addEventListener('click', function(){
+    els.optionsList.appendChild(optionRowEl(''));
+  });
+
+  function fillSettingsForm(cfg, today){
+    els.dateInput.value = (cfg && cfg.openDate) || '';
+    els.titleInput.value = (cfg && cfg.title) || '';
+    els.descInput.value = (cfg && cfg.desc) || '';
+    els.optionsList.innerHTML = '';
+    var opts = (cfg && cfg.options && cfg.options.length) ? cfg.options : ['', ''];
+    opts.forEach(function(o){ els.optionsList.appendChild(optionRowEl(o)); });
+    if(els.optionsList.children.length === 0){
+      els.optionsList.appendChild(optionRowEl(''));
+      els.optionsList.appendChild(optionRowEl(''));
+    }
+    els.todayHint.textContent = '이 날짜에만 참여자 화면이 열립니다. 오늘 날짜: ' + today;
+  }
+
+  function showSettings(){
+    if(!state.isAdmin){ showLock(); return; }
+    hideAll();
+    api('admin/config', { password: state.adminPassword }).then(function(data){
+      fillSettingsForm(data.config, data.today);
+      els.screenSettings.hidden = false;
+    }).catch(function(err){
+      console.error(err);
+      if(err.status === 401){
+        state.isAdmin = false;
+        showLock();
+      }
+    });
+  }
+
+  els.cancelBtn.addEventListener('click', function(){
+    hideAll();
+    loadPublicState();
+  });
+
+  els.saveBtn.addEventListener('click', function(){
+    var date = els.dateInput.value;
+    var title = els.titleInput.value.trim();
+    var desc = els.descInput.value.trim();
+    var options = Array.prototype.map.call(els.optionsList.children, function(row){
+      return row.querySelector('input').value.trim();
+    }).filter(function(v){ return v; });
+
+    if(!date){ alert('열리는 날짜를 선택해주세요.'); return; }
+    if(!title){ alert('질문/제목을 입력해주세요.'); return; }
+    if(options.length < 2){ alert('선택지를 최소 2개 입력해주세요.'); return; }
+
+    els.saveBtn.disabled = true;
+    els.saveBtn.textContent = '저장 중...';
+
+    api('admin/save', {
+      password: state.adminPassword,
+      openDate: date, title: title, desc: desc, options: options
+    }).then(function(){
+      els.saveBtn.disabled = false;
+      els.saveBtn.textContent = '저장하기';
+      hideAll();
+      loadPublicState();
+    }).catch(function(err){
+      console.error(err);
+      els.saveBtn.disabled = false;
+      els.saveBtn.textContent = '저장하기';
+      if(err.status === 401){
+        state.isAdmin = false;
+        showLock();
+      } else {
+        alert('저장에 실패했어요. 다시 시도해주세요.');
+      }
+    });
+  });
+
+  els.deletePollBtn.addEventListener('click', function(){
+    if(!confirm('투표를 초기화할까요? 질문·선택지·모인 투표가 모두 사라지고 되돌릴 수 없어요.')) return;
+    api('admin/delete', { password: state.adminPassword }).then(function(){
+      showSettings();
+    }).catch(function(err){
+      console.error(err);
+      if(err.status === 401){
+        state.isAdmin = false;
+        showLock();
+      } else {
+        alert('삭제에 실패했어요.');
+      }
+    });
+  });
+
+  // ---------- admin: results ----------
+  els.viewResultsBtn.addEventListener('click', function(){ showResults(); });
+  els.backToSettingsBtn.addEventListener('click', function(){ showSettings(); });
+
+  els.resetDataBtn.addEventListener('click', function(){
+    if(!confirm('현재까지 모인 투표를 모두 삭제할까요? 질문/선택지는 그대로 남아요. 되돌릴 수 없어요.')) return;
+    api('admin/reset', { password: state.adminPassword }).then(function(){
+      showResults();
+    }).catch(function(err){
+      console.error(err);
+      alert('초기화에 실패했어요.');
+    });
+  });
+
+  var lastResults = null;
+
+  function showResults(){
+    if(!state.isAdmin){ showLock(); return; }
+    hideAll();
+    els.screenResults.hidden = false;
+    els.pollResults.innerHTML = '<div class="empty-state">불러오는 중...</div>';
+
+    api('admin/results', { password: state.adminPassword }).then(function(data){
+      lastResults = data;
+      var cfg = data.config;
+      els.resultsTitle.textContent = cfg && cfg.title ? cfg.title : '(설정된 이벤트 없음)';
+      var isOpen = !!(cfg && cfg.openDate === data.today);
+      if(isOpen){
+        els.resultsStatusPill.className = 'status-pill live';
+        els.resultsStatusText.textContent = '오늘 열림 · ' + cfg.openDate;
+      } else {
+        els.resultsStatusPill.className = 'status-pill upcoming';
+        els.resultsStatusText.textContent = cfg && cfg.openDate ? ('열리는 날짜: ' + cfg.openDate) : '날짜 미설정';
+      }
+      renderPollResults();
+    }).catch(function(err){
+      console.error(err);
+      if(err.status === 401){
+        state.isAdmin = false;
+        showLock();
+      } else {
+        els.pollResults.innerHTML = '<div class="empty-state">결과를 불러오지 못했어요.</div>';
+      }
+    });
+  }
+
+  function renderPollResults(){
+    if(!lastResults) return;
+    var cfg = lastResults.config;
+    var opts = (cfg && cfg.options) ? cfg.options.filter(function(o){return o && o.trim();}) : [];
+    els.pollResults.innerHTML = '';
+    if(opts.length === 0){
+      els.pollResults.innerHTML = '<div class="empty-state">이 이벤트는 투표 선택지가 없어요.</div>';
+      return;
+    }
+    var counts = opts.map(function(_, idx){ return lastResults.counts[idx] || 0; });
+    var total = counts.reduce(function(a,b){return a+b;}, 0);
+    opts.forEach(function(opt, idx){
+      var c = counts[idx];
+      var pct = total > 0 ? Math.round((c/total)*100) : 0;
+      var row = document.createElement('div');
+      row.className = 'result-row';
+      row.innerHTML =
+        '<div class="result-head"><span></span><span class="count">'+c+'표 · '+pct+'%</span></div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>';
+      row.querySelector('.result-head span').textContent = opt;
+      els.pollResults.appendChild(row);
+    });
+    var totalEl = document.createElement('div');
+    totalEl.className = 'total-votes';
+    totalEl.textContent = '총 ' + total + '표';
+    els.pollResults.appendChild(totalEl);
+  }
+
+  hideAll();
+  loadPublicState();
+  setInterval(function(){
+    if(!state.isAdmin && els.screenParticipant && !els.screenParticipant.hidden){
+      loadPublicState();
+    }
+    if(!state.isAdmin && els.screenWaiting && !els.screenWaiting.hidden){
+      loadPublicState();
+    }
+  }, 15000);
+
+})();
+</script>
+</body>
+</html>

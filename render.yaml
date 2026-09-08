@@ -1,0 +1,16 @@
+# Render Blueprint — connect this repo as a Blueprint and Render fills in
+# build/start commands automatically. You only enter the 3 secret values.
+services:
+  - type: web
+    name: afterglow
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
