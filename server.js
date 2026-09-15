@@ -49,10 +49,15 @@ async function getBallots(openDate) {
   return list;
 }
 async function getMessages(openDate) {
-  const flat = (await redis(["HGETALL", msgsKey(openDate)])) || []; // [id, json, id, json, ...]
+  // field = 보낸 사람 지문, value = 그 사람이 한 번에 보낸 메시지 배열(1인 1회).
+  const flat = (await redis(["HGETALL", msgsKey(openDate)])) || []; // [vid, json, vid, json, ...]
   const list = [];
   for (let j = 1; j < flat.length; j += 2) {
-    try { list.push(JSON.parse(flat[j])); } catch {}
+    try {
+      const v = JSON.parse(flat[j]);
+      if (Array.isArray(v)) list.push(...v);
+      else list.push(v); // 옛 형식(단일 객체) 호환
+    } catch {}
   }
   return list;
 }
@@ -144,6 +149,11 @@ if (process.argv.includes("--selftest")) {
   const groups = {};
   for (const m of msgs) (groups[m.to] = groups[m.to] || []).push(m);
   console.assert(groups["영희"].length === 2 && groups["철수"].length === 1, "message group");
+  // 1인 1회: 한 지문 필드에 메시지 묶음(배열) 저장 → getMessages가 평탄화
+  const flatMsgs = ["vidA", JSON.stringify([{ from: "철수", to: "영희" }, { from: "철수", to: "민수" }]), "vidB", JSON.stringify([{ from: "영희", to: "철수" }])];
+  const ml = [];
+  for (let j = 1; j < flatMsgs.length; j += 2) { const v = JSON.parse(flatMsgs[j]); if (Array.isArray(v)) ml.push(...v); else ml.push(v); }
+  console.assert(ml.length === 3, "msg flatten");
   console.log("selftest ok:", today, counts);
   process.exit(0);
 }
@@ -178,9 +188,11 @@ const server = http.createServer(async (req, res) => {
         const isOpen = isOpenNow(cfg, today);
         const type = cfg && cfg.type === "message" ? "message" : "poll";
         let voted = false;
-        // 메시지 모드는 지금 중복 허용(테스트) → voted 체크 안 함
+        // 투표·메시지 모두 한 지문당 1회 → 이미 참여했는지 확인해 버튼 잠금.
         if (isOpen && type === "poll") {
           voted = (await redis(["HEXISTS", ballotsKey(cfg.openDate), voterId(req)])) === 1;
+        } else if (isOpen && type === "message") {
+          voted = (await redis(["HEXISTS", msgsKey(cfg.openDate), voterId(req)])) === 1;
         }
         return json(res, {
           today,
@@ -235,11 +247,11 @@ const server = http.createServer(async (req, res) => {
           .filter((m) => m.to && m.content)
           .slice(0, max);
         if (!items.length) return json(res, { error: "empty" }, 400);
-        // 중복 허용(테스트 단계): 각 메시지를 랜덤 id로 저장
-        for (const m of items) {
-          const id = crypto.randomBytes(12).toString("hex");
-          await redis(["HSET", msgsKey(cfg.openDate), id, JSON.stringify({ from: from, to: m.to, content: m.content, ts: Date.now() })]);
-        }
+        // 1인 1회(HSETNX = 원자적). 보낸 사람 지문당 한 필드에 메시지 묶음을 저장 → 재전송 차단.
+        const ts = Date.now();
+        const payload = JSON.stringify(items.map((m) => ({ from: from, to: m.to, content: m.content, ts: ts })));
+        const fresh = await redis(["HSETNX", msgsKey(cfg.openDate), voterId(req), payload]);
+        if (fresh === 0) return json(res, { error: "already_sent" }, 409);
         return json(res, { ok: true });
       }
 

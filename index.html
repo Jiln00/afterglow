@@ -736,13 +736,21 @@
       (function(ta, cnt){ ta.addEventListener('input', function(){ cnt.textContent = ta.value.length; }); })(ta, cnt);
       els.msgBlocks.appendChild(block);
     }
-    els.msgSubmitBtn.disabled = false;
-    els.msgSubmitBtn.textContent = '보내기';
+    if(st.voted){
+      // 이미 보낸 신원 → 재전송 차단(투표와 동일)
+      els.msgSubmitBtn.disabled = true;
+      els.msgSubmitBtn.textContent = '이미 보냈어요';
+      Array.prototype.forEach.call(els.msgBlocks.querySelectorAll('input, textarea'), function(e){ e.disabled = true; });
+    } else {
+      els.msgSubmitBtn.disabled = false;
+      els.msgSubmitBtn.textContent = '보내기';
+    }
   }
 
   els.msgSubmitBtn.addEventListener('click', function(){
     var st = state.publicState;
     if(!st || !st.isOpen || st.type !== 'message') return;
+    if(st.voted){ showThanks(); return; } // 이미 보낸 신원 — 재전송 차단
     if(!state.voterName){ renderParticipantView(); return; }
     var blocks = els.msgBlocks.querySelectorAll('.msg-block');
     var messages = [];
@@ -762,12 +770,16 @@
     els.msgSubmitBtn.disabled = true;
     els.msgSubmitBtn.textContent = '보내는 중...';
     api('msg', { name: state.voterName, messages: messages }).then(function(){
+      if(state.publicState) state.publicState.voted = true;
       showThanks();
     }).catch(function(err){
       console.error(err);
       els.msgSubmitBtn.disabled = false;
       els.msgSubmitBtn.textContent = '보내기';
-      if(err.status === 403){ alert('지금은 열려있지 않아요. 새로고침해주세요.'); loadPublicState(); }
+      if(err.status === 409){ // 이미 보낸 신원 — 중복 차단
+        if(state.publicState) state.publicState.voted = true;
+        showThanks();
+      } else if(err.status === 403){ alert('지금은 열려있지 않아요. 새로고침해주세요.'); loadPublicState(); }
       else { alert('전송에 실패했어요. 다시 시도해주세요.'); }
     });
   });
