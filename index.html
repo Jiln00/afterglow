@@ -282,6 +282,11 @@
   }
   .gm-section{ padding: 15px 16px; }
   .gm-label{ font-size: .72rem; font-weight: 700; color: var(--ink-faint); letter-spacing: .04em; margin-bottom: 6px; }
+  .gm-view{ display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .gm-name{ font-size: 1.02rem; font-weight: 700; color: var(--ink); word-break: break-all; }
+  .gm-name.empty{ font-weight: 500; color: var(--ink-faint); font-size: .9rem; }
+  .gm-edit{ flex-shrink: 0; background: none; border: none; cursor: pointer; font-size: 1rem; line-height: 1; padding: 5px; border-radius: 7px; transition: background .15s ease; }
+  .gm-edit:hover{ background: var(--bg-soft); }
   .gm-input{ margin-bottom: 8px; padding: 9px 11px !important; font-size: .92rem !important; }
   .gm-save{ width: 100%; padding: 9px; border: none; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-family: inherit; font-weight: 700; font-size: .85rem; cursor: pointer; transition: filter .15s ease; }
   .gm-save:hover{ filter: brightness(1.08); }
@@ -316,8 +321,14 @@
       <div class="gear-menu" id="gearMenu" hidden>
         <div class="gm-section">
           <div class="gm-label">내 캐릭터 이름</div>
-          <input type="text" class="gm-input" id="gmNameInput" maxlength="40" placeholder="이름을 정해주세요" autocomplete="off" />
-          <button class="gm-save" id="gmSaveBtn">저장</button>
+          <div class="gm-view" id="gmView">
+            <span class="gm-name" id="gmName">—</span>
+            <button class="gm-edit" id="gmEditBtn" title="이름 수정" aria-label="이름 수정">✏️</button>
+          </div>
+          <div class="gm-edit-row" id="gmEditRow" hidden>
+            <input type="text" class="gm-input" id="gmNameInput" maxlength="40" placeholder="이름을 정해주세요" autocomplete="off" />
+            <button class="gm-save" id="gmSaveBtn">저장</button>
+          </div>
         </div>
         <button class="gm-item" id="gmAdminBtn">🔒 관리자 로그인</button>
       </div>
@@ -513,6 +524,10 @@
     screenResults: document.getElementById('screenResults'),
     screenName: document.getElementById('screenName'),
     gearMenu: document.getElementById('gearMenu'),
+    gmView: document.getElementById('gmView'),
+    gmName: document.getElementById('gmName'),
+    gmEditBtn: document.getElementById('gmEditBtn'),
+    gmEditRow: document.getElementById('gmEditRow'),
     gmNameInput: document.getElementById('gmNameInput'),
     gmSaveBtn: document.getElementById('gmSaveBtn'),
     gmAdminBtn: document.getElementById('gmAdminBtn'),
@@ -828,21 +843,29 @@
 
   // 톱니바퀴 = 세로 드롭다운(내 닉네임 보기 + 관리자 로그인). 관리자면 바로 설정으로.
   function closeGearMenu(){ els.gearMenu.hidden = true; }
+  function gmShowView(){
+    els.gmName.textContent = state.voterName || '아직 정하지 않았어요';
+    els.gmName.className = 'gm-name' + (state.voterName ? '' : ' empty');
+    els.gmView.hidden = false;
+    els.gmEditRow.hidden = true;
+  }
+  function gmShowEdit(){
+    els.gmNameInput.value = state.voterName || '';
+    els.gmSaveBtn.textContent = '저장';
+    els.gmView.hidden = true;
+    els.gmEditRow.hidden = false;
+    setTimeout(function(){ try { els.gmNameInput.focus(); } catch(e){} }, 30);
+  }
   function toggleGearMenu(){
-    if(els.gearMenu.hidden){
-      els.gmNameInput.value = state.voterName || '';
-      els.gmSaveBtn.textContent = '저장';
-      els.gearMenu.hidden = false;
-      setTimeout(function(){ try { els.gmNameInput.focus(); } catch(e){} }, 30);
-    } else {
-      closeGearMenu();
-    }
+    if(els.gearMenu.hidden){ gmShowView(); els.gearMenu.hidden = false; }
+    else { closeGearMenu(); }
   }
   els.gearBtn.addEventListener('click', function(e){
     e.stopPropagation();
     if(state.isAdmin){ showSettings(); return; }
     toggleGearMenu();
   });
+  els.gmEditBtn.addEventListener('click', gmShowEdit);
   function saveNickname(){
     var v = els.gmNameInput.value.trim().slice(0, 40);
     state.voterName = v;
@@ -850,8 +873,8 @@
       if(v) localStorage.setItem('afterglow-name', v);
       else localStorage.removeItem('afterglow-name'); // 비우면 다음 참여 때 다시 입력
     } catch(e){}
-    els.gmSaveBtn.textContent = '✓ 저장됨';
-    setTimeout(function(){ closeGearMenu(); renderParticipantView(); }, 600);
+    gmShowView();            // 보기 모드로 돌아가며 새 이름 표시
+    renderParticipantView(); // 화면 내 이름도 갱신
   }
   els.gmSaveBtn.addEventListener('click', saveNickname);
   els.gmNameInput.addEventListener('keydown', function(e){ if(e.key === 'Enter') saveNickname(); });
