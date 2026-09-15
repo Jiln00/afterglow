@@ -1160,15 +1160,24 @@
     } catch(e){}
   }
 
+  // 참여자 화면 상태 요약 — 이게 바뀌었을 때만 다시 그린다(입력 보존).
+  function stateSig(s){
+    return s ? [s.isOpen, s.type, s.title, s.openDate, s.endDate, s.maxMessages, s.voted, (s.options||[]).join('')].join('|') : '';
+  }
+
   hideAll();
   loadPublicState();
+  // 참여자가 어느 화면에 있든(대기·이름·투표·메시지) 이벤트가 닫히거나 바뀌면 자동 반영.
   setInterval(function(){
-    if(!state.isAdmin && els.screenParticipant && !els.screenParticipant.hidden){
-      loadPublicState();
-    }
-    if(!state.isAdmin && els.screenWaiting && !els.screenWaiting.hidden){
-      loadPublicState();
-    }
+    if(state.isAdmin) return;
+    var onParticipant = !els.screenParticipant.hidden || !els.screenWaiting.hidden ||
+                        !els.screenMessage.hidden || !els.screenName.hidden;
+    if(!onParticipant) return;
+    api('state').then(function(data){
+      var changed = stateSig(data) !== stateSig(state.publicState);
+      state.publicState = data;
+      if(changed) renderParticipantView(); // 변화 없으면 그대로 → 작성 중 내용 유지
+    }).catch(function(){});
   }, 15000);
 
 })();
