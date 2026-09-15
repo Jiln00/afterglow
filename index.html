@@ -282,8 +282,9 @@
   }
   .gm-section{ padding: 15px 16px; }
   .gm-label{ font-size: .72rem; font-weight: 700; color: var(--ink-faint); letter-spacing: .04em; margin-bottom: 6px; }
-  .gm-name{ font-size: 1.02rem; font-weight: 700; color: var(--ink); word-break: break-all; }
-  .gm-name.empty{ font-weight: 500; color: var(--ink-faint); font-size: .9rem; }
+  .gm-input{ margin-bottom: 8px; padding: 9px 11px !important; font-size: .92rem !important; }
+  .gm-save{ width: 100%; padding: 9px; border: none; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-family: inherit; font-weight: 700; font-size: .85rem; cursor: pointer; transition: filter .15s ease; }
+  .gm-save:hover{ filter: brightness(1.08); }
   .gm-item{
     width: 100%; text-align: left; padding: 13px 16px; border: none;
     border-top: 1px solid var(--divider); background: none; cursor: pointer;
@@ -315,7 +316,8 @@
       <div class="gear-menu" id="gearMenu" hidden>
         <div class="gm-section">
           <div class="gm-label">내 캐릭터 이름</div>
-          <div class="gm-name" id="gmName">—</div>
+          <input type="text" class="gm-input" id="gmNameInput" maxlength="40" placeholder="이름을 정해주세요" autocomplete="off" />
+          <button class="gm-save" id="gmSaveBtn">저장</button>
         </div>
         <button class="gm-item" id="gmAdminBtn">🔒 관리자 로그인</button>
       </div>
@@ -351,7 +353,7 @@
       <h1>이벤트 설정</h1>
       <button class="logout-link" id="logoutBtn">로그아웃</button>
     </div>
-    <button class="reset-link" id="deletePollBtn">투표 초기화 (되돌릴 수 없음)</button>
+    <button class="reset-link" id="deletePollBtn">이벤트 종료 · 초기화 (준비 중으로 · 되돌릴 수 없음)</button>
     <hr class="divider" />
 
     <div class="field">
@@ -511,7 +513,8 @@
     screenResults: document.getElementById('screenResults'),
     screenName: document.getElementById('screenName'),
     gearMenu: document.getElementById('gearMenu'),
-    gmName: document.getElementById('gmName'),
+    gmNameInput: document.getElementById('gmNameInput'),
+    gmSaveBtn: document.getElementById('gmSaveBtn'),
     gmAdminBtn: document.getElementById('gmAdminBtn'),
     screenParticipant: document.getElementById('screenParticipant'),
     screenMessage: document.getElementById('screenMessage'),
@@ -827,9 +830,10 @@
   function closeGearMenu(){ els.gearMenu.hidden = true; }
   function toggleGearMenu(){
     if(els.gearMenu.hidden){
-      els.gmName.textContent = state.voterName || '아직 정하지 않았어요';
-      els.gmName.className = 'gm-name' + (state.voterName ? '' : ' empty');
+      els.gmNameInput.value = state.voterName || '';
+      els.gmSaveBtn.textContent = '저장';
       els.gearMenu.hidden = false;
+      setTimeout(function(){ try { els.gmNameInput.focus(); } catch(e){} }, 30);
     } else {
       closeGearMenu();
     }
@@ -839,6 +843,18 @@
     if(state.isAdmin){ showSettings(); return; }
     toggleGearMenu();
   });
+  function saveNickname(){
+    var v = els.gmNameInput.value.trim().slice(0, 40);
+    state.voterName = v;
+    try {
+      if(v) localStorage.setItem('afterglow-name', v);
+      else localStorage.removeItem('afterglow-name'); // 비우면 다음 참여 때 다시 입력
+    } catch(e){}
+    els.gmSaveBtn.textContent = '✓ 저장됨';
+    setTimeout(function(){ closeGearMenu(); renderParticipantView(); }, 600);
+  }
+  els.gmSaveBtn.addEventListener('click', saveNickname);
+  els.gmNameInput.addEventListener('keydown', function(e){ if(e.key === 'Enter') saveNickname(); });
   els.gmAdminBtn.addEventListener('click', function(){ closeGearMenu(); showLock(); });
   // 바깥 클릭하면 닫기
   document.addEventListener('click', function(e){
@@ -1006,7 +1022,7 @@
   });
 
   els.deletePollBtn.addEventListener('click', function(){
-    if(!confirm('투표를 초기화할까요? 질문·선택지·모인 투표가 모두 사라지고 되돌릴 수 없어요.')) return;
+    if(!confirm('이 이벤트를 종료하고 "준비 중" 상태로 되돌릴까요?\n제목·선택지·모은 투표/메시지가 모두 사라지고 되돌릴 수 없어요.')) return;
     api('admin/delete', { password: state.adminPassword }).then(function(){
       showSettings();
     }).catch(function(err){
@@ -1025,13 +1041,9 @@
   els.backToSettingsBtn.addEventListener('click', function(){ showSettings(); });
 
   els.resetDataBtn.addEventListener('click', function(){
-    var isMsg = lastResults && lastResults.type === 'message';
-    var msg = isMsg
-      ? '지금까지 받은 메시지를 모두 삭제할까요? 제목/기간은 그대로 남아요. 되돌릴 수 없어요.'
-      : '현재까지 모인 투표를 모두 삭제할까요? 질문/선택지는 그대로 남아요. 되돌릴 수 없어요.';
-    if(!confirm(msg)) return;
-    api('admin/reset', { password: state.adminPassword }).then(function(){
-      showResults();
+    if(!confirm('이 이벤트를 종료하고 "준비 중" 상태로 되돌릴까요?\n모은 투표/메시지와 이벤트 설정이 모두 삭제되고 되돌릴 수 없어요.')) return;
+    api('admin/delete', { password: state.adminPassword }).then(function(){
+      showSettings(); // 빈 설정 화면 — 다음 이벤트 준비. 참여자 화면은 "준비 중"으로.
     }).catch(function(err){
       console.error(err);
       alert('초기화에 실패했어요.');
@@ -1087,7 +1099,7 @@
     els.msgResults.hidden = !isMsg;
     if(isMsg){ renderMsgResults(); return; }
 
-    els.resetDataBtn.textContent = '현재 투표 초기화 (되돌릴 수 없음)';
+    els.resetDataBtn.textContent = '이벤트 종료 · 초기화 (준비 중으로 · 되돌릴 수 없음)';
     var opts = (cfg && cfg.options) ? cfg.options.filter(function(o){return o && o.trim();}) : [];
     els.pollResults.innerHTML = '';
     els.voterList.innerHTML = '';
@@ -1131,7 +1143,7 @@
   }
 
   function renderMsgResults(){
-    els.resetDataBtn.textContent = '받은 메시지 초기화 (되돌릴 수 없음)';
+    els.resetDataBtn.textContent = '이벤트 종료 · 초기화 (준비 중으로 · 되돌릴 수 없음)';
     var groups = (lastResults && lastResults.groups) || {};
     var tos = Object.keys(groups);
     els.msgResults.innerHTML = '';
