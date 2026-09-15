@@ -19,6 +19,8 @@ const K_CONFIG = "afterglow:config";
 // 투표 기록: 투표(날짜)별 해시. field = 투표자 지문, value = JSON {name, optionIndex, ts}
 // 한 지문당 한 표(HSETNX) → 중복 차단 + 누가 뭘 골랐는지 함께 저장(운영자 확인용).
 function ballotsKey(openDate) { return "afterglow:ballots:" + openDate; }
+// 익명 메시지: 메시지별 해시. field = 랜덤 id(중복 허용), value = JSON {from, to, content, ts}
+function msgsKey(openDate) { return "afterglow:msgs:" + openDate; }
 
 async function redis(cmd) {
   const res = await fetch(REST_URL, {
@@ -46,13 +48,27 @@ async function getBallots(openDate) {
   }
   return list;
 }
+async function getMessages(openDate) {
+  const flat = (await redis(["HGETALL", msgsKey(openDate)])) || []; // [id, json, id, json, ...]
+  const list = [];
+  for (let j = 1; j < flat.length; j += 2) {
+    try { list.push(JSON.parse(flat[j])); } catch {}
+  }
+  return list;
+}
 async function resetVotes() {
   const cfg = await getConfig();
-  if (cfg && cfg.openDate) await redis(["DEL", ballotsKey(cfg.openDate)]);
+  if (cfg && cfg.openDate) {
+    await redis(["DEL", ballotsKey(cfg.openDate)]);
+    await redis(["DEL", msgsKey(cfg.openDate)]);
+  }
 }
 async function deleteAll() {
   const cfg = await getConfig();
-  if (cfg && cfg.openDate) await redis(["DEL", ballotsKey(cfg.openDate)]);
+  if (cfg && cfg.openDate) {
+    await redis(["DEL", ballotsKey(cfg.openDate)]);
+    await redis(["DEL", msgsKey(cfg.openDate)]);
+  }
   await redis(["DEL", K_CONFIG]);
 }
 
@@ -113,6 +129,11 @@ if (process.argv.includes("--selftest")) {
   const v2 = voterId({ headers: { "x-forwarded-for": "1.2.3.4", "user-agent": "A" }, socket: {} });
   const v3 = voterId({ headers: { "x-forwarded-for": "1.2.3.4", "user-agent": "B" }, socket: {} });
   console.assert(v1 === v2 && v1 !== v3, "voterId dedup key");
+  // 메시지: 받는 사람별 그룹핑
+  const msgs = [{ from: "철수", to: "영희" }, { from: "민수", to: "영희" }, { from: "영희", to: "철수" }];
+  const groups = {};
+  for (const m of msgs) (groups[m.to] = groups[m.to] || []).push(m);
+  console.assert(groups["영희"].length === 2 && groups["철수"].length === 1, "message group");
   console.log("selftest ok:", today, counts);
   process.exit(0);
 }
@@ -145,14 +166,18 @@ const server = http.createServer(async (req, res) => {
         const cfg = await getConfig();
         const today = todayStrSeoul();
         const isOpen = !!(cfg && cfg.openDate === today);
+        const type = cfg && cfg.type === "message" ? "message" : "poll";
         let voted = false;
-        if (isOpen) {
+        // 메시지 모드는 지금 중복 허용(테스트) → voted 체크 안 함
+        if (isOpen && type === "poll") {
           voted = (await redis(["HEXISTS", ballotsKey(cfg.openDate), voterId(req)])) === 1;
         }
         return json(res, {
           today,
           isOpen,
           voted,
+          type: isOpen ? type : null,
+          maxMessages: isOpen ? (cfg.maxMessages || 2) : null,
           title: isOpen ? cfg.title : null,
           desc: isOpen ? cfg.desc : null,
           options: isOpen ? cfg.options : null,
@@ -183,6 +208,30 @@ const server = http.createServer(async (req, res) => {
         return json(res, { ok: true });
       }
 
+      if (method === "POST" && apiPath === "msg") {
+        const body = await readBody(req);
+        const cfg = await getConfig();
+        const today = todayStrSeoul();
+        if (!cfg || cfg.type !== "message" || cfg.openDate !== today) return json(res, { error: "not_open" }, 403);
+        const from = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
+        if (!from) return json(res, { error: "name_required" }, 400);
+        const max = cfg.maxMessages || 2;
+        const items = (Array.isArray(body.messages) ? body.messages : [])
+          .map((m) => ({
+            to: m && typeof m.to === "string" ? m.to.trim().slice(0, 40) : "",
+            content: m && typeof m.content === "string" ? m.content.trim().slice(0, 200) : "",
+          }))
+          .filter((m) => m.to && m.content)
+          .slice(0, max);
+        if (!items.length) return json(res, { error: "empty" }, 400);
+        // 중복 허용(테스트 단계): 각 메시지를 랜덤 id로 저장
+        for (const m of items) {
+          const id = crypto.randomBytes(12).toString("hex");
+          await redis(["HSET", msgsKey(cfg.openDate), id, JSON.stringify({ from: from, to: m.to, content: m.content, ts: Date.now() })]);
+        }
+        return json(res, { ok: true });
+      }
+
       if (method === "POST" && apiPath === "admin/login") {
         const body = await readBody(req);
         if (body.password === ADMIN_PASSWORD) return json(res, { ok: true });
@@ -201,8 +250,11 @@ const server = http.createServer(async (req, res) => {
               .map((o) => o.trim().slice(0, 60))
               .slice(0, 20)
           : [];
+        const type = body.type === "message" ? "message" : "poll";
+        const maxMessages = Math.min(Math.max(parseInt(body.maxMessages, 10) || 2, 1), 5);
         if (!openDate || !title) return json(res, { error: "missing_fields" }, 400);
-        const cfg = { openDate, title, desc, options, updatedAt: Date.now() };
+        if (type === "poll" && options.length < 2) return json(res, { error: "need_options" }, 400);
+        const cfg = { type, openDate, title, desc, options, maxMessages, updatedAt: Date.now() };
         await setConfig(cfg);
         return json(res, { ok: true, config: cfg });
       }
@@ -218,6 +270,14 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         if (body.password !== ADMIN_PASSWORD) return json(res, { error: "unauthorized" }, 401);
         const cfg = await getConfig();
+        if (cfg && cfg.type === "message") {
+          // 메시지: 받는 사람별로 묶기
+          const msgs = cfg.openDate ? await getMessages(cfg.openDate) : [];
+          const groups = {};
+          for (const m of msgs) (groups[m.to] = groups[m.to] || []).push({ from: m.from, content: m.content, ts: m.ts });
+          for (const to in groups) groups[to].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+          return json(res, { config: cfg, today: todayStrSeoul(), type: "message", groups, total: msgs.length });
+        }
         const ballots = cfg && cfg.openDate ? await getBallots(cfg.openDate) : [];
         const counts = {};
         for (const b of ballots) counts[b.optionIndex] = (counts[b.optionIndex] || 0) + 1;
@@ -226,7 +286,7 @@ const server = http.createServer(async (req, res) => {
           .slice()
           .sort((a, b) => (b.ts || 0) - (a.ts || 0))
           .map((b) => ({ name: b.name, optionIndex: b.optionIndex }));
-        return json(res, { config: cfg, today: todayStrSeoul(), counts, totalVotes: ballots.length, voters });
+        return json(res, { config: cfg, today: todayStrSeoul(), type: "poll", counts, totalVotes: ballots.length, voters });
       }
 
       if (method === "POST" && apiPath === "admin/reset") {

@@ -257,6 +257,22 @@
   .voter-row .vname{ font-size: .9rem; font-weight: 600; color: var(--ink); word-break: break-all; }
   .voter-row .vchoice{ font-size: .84rem; color: var(--accent); font-weight: 600; flex-shrink: 0; }
 
+  .type-row{ display: flex; gap: 8px; }
+  .type-btn{ flex: 1; padding: 11px; border-radius: 10px; border: 1.5px solid var(--input-border); background: var(--input-bg); color: var(--ink-soft); font-family: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; transition: border-color .15s ease, background .15s ease, color .15s ease; }
+  .type-btn.selected{ border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+  .msg-block{ margin-bottom: 18px; }
+  .msg-block .mb-label{ font-size: .8rem; font-weight: 700; color: var(--ink-soft); margin-bottom: 8px; }
+  .msg-block textarea{ margin-top: 8px; min-height: 72px; }
+  .msg-count{ font-size: .74rem; color: var(--ink-faint); text-align: right; margin-top: 4px; }
+
+  .msg-group{ border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; background: var(--input-bg); }
+  .msg-group .mg-to{ font-size: .95rem; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+  .msg-group .mg-to .mg-count{ color: var(--ink-faint); font-weight: 500; font-size: .78rem; margin-left: 6px; }
+  .msg-item{ padding: 9px 0; border-top: 1px solid var(--divider); }
+  .msg-item .mi-from{ font-size: .8rem; font-weight: 700; color: var(--accent); margin-bottom: 3px; }
+  .msg-item .mi-content{ font-size: .88rem; color: var(--ink); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+
   [hidden]{ display: none !important; }
 
   @media (max-width: 420px){
@@ -311,6 +327,14 @@
     <hr class="divider" />
 
     <div class="field">
+      <label>유형</label>
+      <div class="type-row">
+        <button type="button" class="type-btn selected" id="typePollBtn">투표</button>
+        <button type="button" class="type-btn" id="typeMsgBtn">익명 메시지</button>
+      </div>
+    </div>
+
+    <div class="field">
       <label for="dateInput">열리는 날짜</label>
       <input type="date" id="dateInput" />
       <p class="hint" id="todayHint">이 날짜에만 참여자 화면이 열립니다. 오늘 날짜: </p>
@@ -326,10 +350,16 @@
       <input type="text" id="descInput" placeholder="참여자에게 보여줄 짧은 설명" maxlength="200" />
     </div>
 
-    <div class="field">
+    <div class="field" id="pollOptionsField">
       <label>투표 선택지 (최소 2개)</label>
       <div id="optionsList"></div>
       <button class="add-option" id="addOptionBtn" type="button">+ 선택지 추가</button>
+    </div>
+
+    <div class="field" id="msgSettingsField" hidden>
+      <label for="maxMsgInput">1인당 보낼 수 있는 메시지 수</label>
+      <input type="number" id="maxMsgInput" min="1" max="5" value="2" />
+      <p class="hint">호감도 체크는 보통 2명. 참여자는 이 수만큼 서로 다른 대상에게 보낼 수 있어요.</p>
     </div>
 
     <div class="btn-row">
@@ -351,9 +381,11 @@
 
     <div id="pollResults"></div>
 
-    <hr class="divider" />
-    <div class="voter-head">참여자 명단 <span class="voter-sub">운영자 전용 · 누가 무엇을 골랐는지</span></div>
+    <hr class="divider" id="voterDivider" />
+    <div class="voter-head" id="voterHead">참여자 명단 <span class="voter-sub">운영자 전용 · 누가 무엇을 골랐는지</span></div>
     <div id="voterList"></div>
+
+    <div id="msgResults" hidden></div>
 
     <hr class="divider" />
     <div class="btn-row">
@@ -389,6 +421,15 @@
     </div>
 
     <button class="btn btn-primary" id="submitBtn" style="width:100%; padding: 13px;">제출하기</button>
+  </div>
+
+  <!-- MESSAGE SCREEN -->
+  <div class="card" id="screenMessage" hidden>
+    <span class="eyebrow">익명 메시지</span>
+    <p class="p-title" id="msgTitle"></p>
+    <p class="p-desc" id="msgDesc" hidden></p>
+    <div id="msgBlocks"></div>
+    <button class="btn btn-primary" id="msgSubmitBtn" style="width:100%; padding: 13px;">보내기</button>
   </div>
 
   <!-- SUBMITTED SCREEN -->
@@ -436,6 +477,7 @@
     screenResults: document.getElementById('screenResults'),
     screenName: document.getElementById('screenName'),
     screenParticipant: document.getElementById('screenParticipant'),
+    screenMessage: document.getElementById('screenMessage'),
     screenSubmitted: document.getElementById('screenSubmitted'),
 
     pwInput: document.getElementById('pwInput'),
@@ -473,6 +515,19 @@
     partPollBlock: document.getElementById('partPollBlock'),
     partPollOptions: document.getElementById('partPollOptions'),
     submitBtn: document.getElementById('submitBtn'),
+
+    typePollBtn: document.getElementById('typePollBtn'),
+    typeMsgBtn: document.getElementById('typeMsgBtn'),
+    pollOptionsField: document.getElementById('pollOptionsField'),
+    msgSettingsField: document.getElementById('msgSettingsField'),
+    maxMsgInput: document.getElementById('maxMsgInput'),
+    msgTitle: document.getElementById('msgTitle'),
+    msgDesc: document.getElementById('msgDesc'),
+    msgBlocks: document.getElementById('msgBlocks'),
+    msgSubmitBtn: document.getElementById('msgSubmitBtn'),
+    voterHead: document.getElementById('voterHead'),
+    voterDivider: document.getElementById('voterDivider'),
+    msgResults: document.getElementById('msgResults'),
   };
 
   var state = {
@@ -480,6 +535,7 @@
     adminPassword: null,     // held in memory only after successful login
     publicState: null,       // last /api/state response
     selectedOptionIdx: null,
+    adminType: 'poll',       // 설정 화면에서 고른 유형
     voterName: (function(){ try { return localStorage.getItem('afterglow-name') || ''; } catch(e){ return ''; } })(),
   };
 
@@ -490,6 +546,7 @@
     els.screenResults.hidden = true;
     els.screenName.hidden = true;
     els.screenParticipant.hidden = true;
+    els.screenMessage.hidden = true;
     els.screenSubmitted.hidden = true;
   }
 
@@ -545,6 +602,8 @@
       setTimeout(function(){ try { els.nameInput.focus(); } catch(e){} }, 30);
       return;
     }
+    // 메시지 모드 → 별도 화면
+    if(st.type === 'message'){ renderMessageView(); return; }
     hideAll();
     els.screenParticipant.hidden = false;
     els.partTitle.textContent = st.title || '';
@@ -587,6 +646,71 @@
       els.submitBtn.textContent = '제출하기';
     }
   }
+
+  function renderMessageView(){
+    var st = state.publicState;
+    hideAll();
+    els.screenMessage.hidden = false;
+    els.msgTitle.textContent = st.title || '';
+    if(st.desc && st.desc.trim()){ els.msgDesc.hidden = false; els.msgDesc.textContent = st.desc; }
+    else { els.msgDesc.hidden = true; }
+    var n = st.maxMessages || 2;
+    els.msgBlocks.innerHTML = '';
+    var hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.style.margin = '0 0 16px';
+    hint.textContent = n > 1
+      ? ('서로 다른 대상에게 최대 ' + n + '통 보낼 수 있어요. (1통만 보내도 됩니다)')
+      : '한 명에게 보낼 수 있어요.';
+    els.msgBlocks.appendChild(hint);
+    for(var i=0;i<n;i++){
+      var block = document.createElement('div');
+      block.className = 'msg-block';
+      block.innerHTML =
+        '<div class="mb-label">메시지 ' + (i+1) + '</div>' +
+        '<input type="text" class="mb-to" maxlength="40" placeholder="받는 캐릭터 이름을 정확히 적어주세요" autocomplete="off" />' +
+        '<textarea class="mb-content" maxlength="200" placeholder="내용 (200자 이내)"></textarea>' +
+        '<div class="msg-count"><span class="mc-n">0</span>/200</div>';
+      var ta = block.querySelector('.mb-content');
+      var cnt = block.querySelector('.mc-n');
+      (function(ta, cnt){ ta.addEventListener('input', function(){ cnt.textContent = ta.value.length; }); })(ta, cnt);
+      els.msgBlocks.appendChild(block);
+    }
+    els.msgSubmitBtn.disabled = false;
+    els.msgSubmitBtn.textContent = '보내기';
+  }
+
+  els.msgSubmitBtn.addEventListener('click', function(){
+    var st = state.publicState;
+    if(!st || !st.isOpen || st.type !== 'message') return;
+    if(!state.voterName){ renderParticipantView(); return; }
+    var blocks = els.msgBlocks.querySelectorAll('.msg-block');
+    var messages = [];
+    var seen = {};
+    var dupTo = false;
+    Array.prototype.forEach.call(blocks, function(b){
+      var to = b.querySelector('.mb-to').value.trim();
+      var content = b.querySelector('.mb-content').value.trim();
+      if(to && content){
+        if(seen[to.toLowerCase()]) dupTo = true;
+        seen[to.toLowerCase()] = true;
+        messages.push({ to: to, content: content });
+      }
+    });
+    if(!messages.length){ alert('받는 사람과 내용을 최소 1개는 적어주세요.'); return; }
+    if(dupTo){ alert('같은 사람에게는 한 통만 보낼 수 있어요.'); return; }
+    els.msgSubmitBtn.disabled = true;
+    els.msgSubmitBtn.textContent = '보내는 중...';
+    api('msg', { name: state.voterName, messages: messages }).then(function(){
+      showThanks();
+    }).catch(function(err){
+      console.error(err);
+      els.msgSubmitBtn.disabled = false;
+      els.msgSubmitBtn.textContent = '보내기';
+      if(err.status === 403){ alert('지금은 열려있지 않아요. 새로고침해주세요.'); loadPublicState(); }
+      else { alert('전송에 실패했어요. 다시 시도해주세요.'); }
+    });
+  });
 
   function goToVote(){
     var v = els.nameInput.value.trim();
@@ -732,6 +856,19 @@
     els.optionsList.appendChild(optionRowEl(''));
   });
 
+  function applyAdminType(t){
+    state.adminType = (t === 'message') ? 'message' : 'poll';
+    els.typePollBtn.classList.toggle('selected', state.adminType === 'poll');
+    els.typeMsgBtn.classList.toggle('selected', state.adminType === 'message');
+    els.pollOptionsField.hidden = (state.adminType === 'message');
+    els.msgSettingsField.hidden = (state.adminType !== 'message');
+    els.titleInput.placeholder = (state.adminType === 'message')
+      ? '예: 오늘의 익명 메시지'
+      : '예: 오늘 회식 장소 어디로 갈까요?';
+  }
+  els.typePollBtn.addEventListener('click', function(){ applyAdminType('poll'); });
+  els.typeMsgBtn.addEventListener('click', function(){ applyAdminType('message'); });
+
   function fillSettingsForm(cfg, today){
     els.dateInput.value = (cfg && cfg.openDate) || '';
     els.titleInput.value = (cfg && cfg.title) || '';
@@ -744,6 +881,8 @@
       els.optionsList.appendChild(optionRowEl(''));
     }
     els.todayHint.textContent = '이 날짜에만 참여자 화면이 열립니다. 오늘 날짜: ' + today;
+    els.maxMsgInput.value = (cfg && cfg.maxMessages) || 2;
+    applyAdminType(cfg && cfg.type === 'message' ? 'message' : 'poll');
   }
 
   function showSettings(){
@@ -775,15 +914,17 @@
     }).filter(function(v){ return v; });
 
     if(!date){ alert('열리는 날짜를 선택해주세요.'); return; }
-    if(!title){ alert('질문/제목을 입력해주세요.'); return; }
-    if(options.length < 2){ alert('선택지를 최소 2개 입력해주세요.'); return; }
+    if(!title){ alert('제목을 입력해주세요.'); return; }
+    if(state.adminType === 'poll' && options.length < 2){ alert('선택지를 최소 2개 입력해주세요.'); return; }
+    var maxMessages = parseInt(els.maxMsgInput.value, 10) || 2;
 
     els.saveBtn.disabled = true;
     els.saveBtn.textContent = '저장 중...';
 
     api('admin/save', {
       password: state.adminPassword,
-      openDate: date, title: title, desc: desc, options: options
+      type: state.adminType,
+      openDate: date, title: title, desc: desc, options: options, maxMessages: maxMessages
     }).then(function(){
       els.saveBtn.disabled = false;
       els.saveBtn.textContent = '저장하기';
@@ -866,6 +1007,15 @@
   function renderPollResults(){
     if(!lastResults) return;
     var cfg = lastResults.config;
+    // 모드에 따라 보이는 영역 토글
+    var isMsg = lastResults.type === 'message';
+    els.pollResults.hidden = isMsg;
+    els.voterHead.hidden = isMsg;
+    els.voterDivider.hidden = isMsg;
+    els.voterList.hidden = isMsg;
+    els.msgResults.hidden = !isMsg;
+    if(isMsg){ renderMsgResults(); return; }
+
     var opts = (cfg && cfg.options) ? cfg.options.filter(function(o){return o && o.trim();}) : [];
     els.pollResults.innerHTML = '';
     els.voterList.innerHTML = '';
@@ -906,6 +1056,43 @@
         els.voterList.appendChild(row);
       });
     }
+  }
+
+  function renderMsgResults(){
+    var groups = (lastResults && lastResults.groups) || {};
+    var tos = Object.keys(groups);
+    els.msgResults.innerHTML = '';
+    if(!tos.length){
+      els.msgResults.innerHTML = '<div class="empty-state" style="padding:16px;">아직 받은 메시지가 없어요.</div>';
+      return;
+    }
+    tos.sort(function(a,b){ return groups[b].length - groups[a].length; }); // 통수 많은 순
+    var totalEl = document.createElement('div');
+    totalEl.className = 'total-votes';
+    totalEl.style.textAlign = 'left';
+    totalEl.style.margin = '0 0 14px';
+    totalEl.textContent = '총 ' + (lastResults.total || 0) + '통 · 받는 사람 ' + tos.length + '명';
+    els.msgResults.appendChild(totalEl);
+    tos.forEach(function(to){
+      var list = groups[to];
+      var g = document.createElement('div');
+      g.className = 'msg-group';
+      var head = document.createElement('div');
+      head.className = 'mg-to';
+      head.innerHTML = '<span class="mg-toname"></span><span class="mg-count"></span>';
+      head.querySelector('.mg-toname').textContent = '받는 사람: ' + to;
+      head.querySelector('.mg-count').textContent = ' (' + list.length + '통)';
+      g.appendChild(head);
+      list.forEach(function(m){
+        var item = document.createElement('div');
+        item.className = 'msg-item';
+        item.innerHTML = '<div class="mi-from"></div><div class="mi-content"></div>';
+        item.querySelector('.mi-from').textContent = '← ' + (m.from || '(이름없음)');
+        item.querySelector('.mi-content').textContent = m.content || '';
+        g.appendChild(item);
+      });
+      els.msgResults.appendChild(g);
+    });
   }
 
   hideAll();
