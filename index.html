@@ -416,6 +416,23 @@
     </div>
   </div>
 
+  <!-- MY PROFILE SCREEN (참여자: 내 닉네임 확인/변경 + 관리자 로그인 진입) -->
+  <div class="card center-card" id="screenProfile" hidden>
+    <span class="eyebrow">내 정보</span>
+    <h1>내 캐릭터 이름</h1>
+    <p class="sub">이 브라우저에서 참여할 때 사용하는 이름이에요.</p>
+    <div class="field" style="text-align:left; max-width:320px; margin:18px auto 0;">
+      <input type="text" id="profileNameInput" placeholder="아직 정하지 않았어요" maxlength="40" autocomplete="off" />
+      <p class="hint">비워두고 저장하면 다음 참여 때 이름을 다시 입력하게 됩니다.</p>
+    </div>
+    <div class="btn-row" style="justify-content:center; margin-top:6px;">
+      <button class="btn btn-primary" id="profileSaveBtn">저장</button>
+      <button class="btn btn-text" id="profileBackBtn">닫기</button>
+    </div>
+    <hr class="divider" />
+    <button class="btn btn-text" id="adminLoginLink">🔒 관리자 로그인</button>
+  </div>
+
   <!-- PARTICIPANT SCREEN -->
   <div class="card" id="screenParticipant" hidden>
     <span class="eyebrow">익명 참여</span>
@@ -482,6 +499,11 @@
     screenSettings: document.getElementById('screenSettings'),
     screenResults: document.getElementById('screenResults'),
     screenName: document.getElementById('screenName'),
+    screenProfile: document.getElementById('screenProfile'),
+    profileNameInput: document.getElementById('profileNameInput'),
+    profileSaveBtn: document.getElementById('profileSaveBtn'),
+    profileBackBtn: document.getElementById('profileBackBtn'),
+    adminLoginLink: document.getElementById('adminLoginLink'),
     screenParticipant: document.getElementById('screenParticipant'),
     screenMessage: document.getElementById('screenMessage'),
     screenSubmitted: document.getElementById('screenSubmitted'),
@@ -554,6 +576,7 @@
     els.screenSettings.hidden = true;
     els.screenResults.hidden = true;
     els.screenName.hidden = true;
+    els.screenProfile.hidden = true;
     els.screenParticipant.hidden = true;
     els.screenMessage.hidden = true;
     els.screenSubmitted.hidden = true;
@@ -796,9 +819,29 @@
     if(state.isAdmin){
       showSettings();
     } else {
-      showLock();
+      showProfile(); // 참여자: 내 닉네임 확인/변경 (관리자 로그인은 이 안에)
     }
   });
+
+  // ---------- 내 정보(닉네임) ----------
+  function showProfile(){
+    hideAll();
+    els.screenProfile.hidden = false;
+    els.profileNameInput.value = state.voterName || '';
+    setTimeout(function(){ try { els.profileNameInput.focus(); } catch(e){} }, 30);
+  }
+  els.profileSaveBtn.addEventListener('click', function(){
+    var v = els.profileNameInput.value.trim().slice(0, 40);
+    state.voterName = v;
+    try {
+      if(v) localStorage.setItem('afterglow-name', v);
+      else localStorage.removeItem('afterglow-name');
+    } catch(e){}
+    hideAll();
+    renderParticipantView();
+  });
+  els.profileBackBtn.addEventListener('click', function(){ hideAll(); renderParticipantView(); });
+  els.adminLoginLink.addEventListener('click', showLock);
 
   els.lockCancelBtn.addEventListener('click', function(){
     hideAll();
