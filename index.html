@@ -94,7 +94,7 @@
   .gear-btn:active{ transform: scale(.94); }
   .gear-btn svg{ width: 18px; height: 18px; }
 
-  .topbar-actions{ display: flex; align-items: center; gap: 8px; }
+  .topbar-actions{ display: flex; align-items: center; gap: 8px; position: relative; }
   .theme-btn{
     width: 38px; height: 38px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
@@ -273,6 +273,25 @@
   .msg-item .mi-from{ font-size: .8rem; font-weight: 700; color: var(--accent); margin-bottom: 3px; }
   .msg-item .mi-content{ font-size: .88rem; color: var(--ink); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
 
+  /* 톱니바퀴 드롭다운 (구글 계정 메뉴 느낌) */
+  .gear-menu{
+    position: absolute; top: 46px; right: 0; z-index: 50;
+    width: 244px; background: var(--card);
+    border: 1px solid var(--card-border); border-radius: 14px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .gm-section{ padding: 15px 16px; }
+  .gm-label{ font-size: .72rem; font-weight: 700; color: var(--ink-faint); letter-spacing: .04em; margin-bottom: 6px; }
+  .gm-name{ font-size: 1.02rem; font-weight: 700; color: var(--ink); word-break: break-all; }
+  .gm-name.empty{ font-weight: 500; color: var(--ink-faint); font-size: .9rem; }
+  .gm-item{
+    width: 100%; text-align: left; padding: 13px 16px; border: none;
+    border-top: 1px solid var(--divider); background: none; cursor: pointer;
+    font-family: inherit; font-size: .9rem; font-weight: 600; color: var(--ink);
+    transition: background .15s ease, color .15s ease;
+  }
+  .gm-item:hover{ background: var(--bg-soft); color: var(--accent); }
+
   [hidden]{ display: none !important; }
 
   @media (max-width: 420px){
@@ -288,9 +307,18 @@
     <p class="logo"><span class="after">AFTER</span><span class="glow">GLOW</span></p>
     <div class="topbar-actions">
       <button class="theme-btn" id="themeBtn" title="라이트/다크 모드" aria-label="라이트/다크 모드">🌙</button>
-      <button class="gear-btn" id="gearBtn" title="운영자 설정" aria-label="운영자 설정">
+      <button class="gear-btn" id="gearBtn" title="설정" aria-label="설정">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
+
+      <!-- 톱니바퀴 드롭다운: 내 닉네임(보기 전용) + 관리자 로그인 -->
+      <div class="gear-menu" id="gearMenu" hidden>
+        <div class="gm-section">
+          <div class="gm-label">내 캐릭터 이름</div>
+          <div class="gm-name" id="gmName">—</div>
+        </div>
+        <button class="gm-item" id="gmAdminBtn">🔒 관리자 로그인</button>
+      </div>
     </div>
   </div>
 
@@ -416,23 +444,6 @@
     </div>
   </div>
 
-  <!-- MY PROFILE SCREEN (참여자: 내 닉네임 확인/변경 + 관리자 로그인 진입) -->
-  <div class="card center-card" id="screenProfile" hidden>
-    <span class="eyebrow">내 정보</span>
-    <h1>내 캐릭터 이름</h1>
-    <p class="sub">이 브라우저에서 참여할 때 사용하는 이름이에요.</p>
-    <div class="field" style="text-align:left; max-width:320px; margin:18px auto 0;">
-      <input type="text" id="profileNameInput" placeholder="아직 정하지 않았어요" maxlength="40" autocomplete="off" />
-      <p class="hint">비워두고 저장하면 다음 참여 때 이름을 다시 입력하게 됩니다.</p>
-    </div>
-    <div class="btn-row" style="justify-content:center; margin-top:6px;">
-      <button class="btn btn-primary" id="profileSaveBtn">저장</button>
-      <button class="btn btn-text" id="profileBackBtn">닫기</button>
-    </div>
-    <hr class="divider" />
-    <button class="btn btn-text" id="adminLoginLink">🔒 관리자 로그인</button>
-  </div>
-
   <!-- PARTICIPANT SCREEN -->
   <div class="card" id="screenParticipant" hidden>
     <span class="eyebrow">익명 참여</span>
@@ -499,11 +510,9 @@
     screenSettings: document.getElementById('screenSettings'),
     screenResults: document.getElementById('screenResults'),
     screenName: document.getElementById('screenName'),
-    screenProfile: document.getElementById('screenProfile'),
-    profileNameInput: document.getElementById('profileNameInput'),
-    profileSaveBtn: document.getElementById('profileSaveBtn'),
-    profileBackBtn: document.getElementById('profileBackBtn'),
-    adminLoginLink: document.getElementById('adminLoginLink'),
+    gearMenu: document.getElementById('gearMenu'),
+    gmName: document.getElementById('gmName'),
+    gmAdminBtn: document.getElementById('gmAdminBtn'),
     screenParticipant: document.getElementById('screenParticipant'),
     screenMessage: document.getElementById('screenMessage'),
     screenSubmitted: document.getElementById('screenSubmitted'),
@@ -576,7 +585,6 @@
     els.screenSettings.hidden = true;
     els.screenResults.hidden = true;
     els.screenName.hidden = true;
-    els.screenProfile.hidden = true;
     els.screenParticipant.hidden = true;
     els.screenMessage.hidden = true;
     els.screenSubmitted.hidden = true;
@@ -815,33 +823,29 @@
     setTimeout(function(){ els.pwInput.focus(); }, 30);
   }
 
-  els.gearBtn.addEventListener('click', function(){
-    if(state.isAdmin){
-      showSettings();
+  // 톱니바퀴 = 세로 드롭다운(내 닉네임 보기 + 관리자 로그인). 관리자면 바로 설정으로.
+  function closeGearMenu(){ els.gearMenu.hidden = true; }
+  function toggleGearMenu(){
+    if(els.gearMenu.hidden){
+      els.gmName.textContent = state.voterName || '아직 정하지 않았어요';
+      els.gmName.className = 'gm-name' + (state.voterName ? '' : ' empty');
+      els.gearMenu.hidden = false;
     } else {
-      showProfile(); // 참여자: 내 닉네임 확인/변경 (관리자 로그인은 이 안에)
+      closeGearMenu();
+    }
+  }
+  els.gearBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    if(state.isAdmin){ showSettings(); return; }
+    toggleGearMenu();
+  });
+  els.gmAdminBtn.addEventListener('click', function(){ closeGearMenu(); showLock(); });
+  // 바깥 클릭하면 닫기
+  document.addEventListener('click', function(e){
+    if(!els.gearMenu.hidden && !els.gearMenu.contains(e.target) && e.target !== els.gearBtn){
+      closeGearMenu();
     }
   });
-
-  // ---------- 내 정보(닉네임) ----------
-  function showProfile(){
-    hideAll();
-    els.screenProfile.hidden = false;
-    els.profileNameInput.value = state.voterName || '';
-    setTimeout(function(){ try { els.profileNameInput.focus(); } catch(e){} }, 30);
-  }
-  els.profileSaveBtn.addEventListener('click', function(){
-    var v = els.profileNameInput.value.trim().slice(0, 40);
-    state.voterName = v;
-    try {
-      if(v) localStorage.setItem('afterglow-name', v);
-      else localStorage.removeItem('afterglow-name');
-    } catch(e){}
-    hideAll();
-    renderParticipantView();
-  });
-  els.profileBackBtn.addEventListener('click', function(){ hideAll(); renderParticipantView(); });
-  els.adminLoginLink.addEventListener('click', showLock);
 
   els.lockCancelBtn.addEventListener('click', function(){
     hideAll();
