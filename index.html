@@ -335,13 +335,19 @@
     </div>
 
     <div class="field">
-      <label for="dateInput">열리는 날짜</label>
+      <label for="dateInput" id="dateLabel">열리는 날짜</label>
       <input type="date" id="dateInput" />
       <p class="hint" id="todayHint">이 날짜에만 참여자 화면이 열립니다. 오늘 날짜: </p>
     </div>
 
+    <div class="field" id="endDateField" hidden>
+      <label for="endDateInput">종료일 (기간 끝나는 날)</label>
+      <input type="date" id="endDateInput" />
+      <p class="hint">시작일~종료일 사이에는 계속 열려 있어요.</p>
+    </div>
+
     <div class="field">
-      <label for="titleInput">질문 / 제목</label>
+      <label for="titleInput" id="titleLabel">질문 / 제목</label>
       <input type="text" id="titleInput" placeholder="예: 오늘 회식 장소 어디로 갈까요?" maxlength="120" />
     </div>
 
@@ -488,6 +494,9 @@
     waitingSub: document.getElementById('waitingSub'),
 
     dateInput: document.getElementById('dateInput'),
+    dateLabel: document.getElementById('dateLabel'),
+    endDateField: document.getElementById('endDateField'),
+    endDateInput: document.getElementById('endDateInput'),
     todayHint: document.getElementById('todayHint'),
     titleInput: document.getElementById('titleInput'),
     descInput: document.getElementById('descInput'),
@@ -587,6 +596,8 @@
       els.screenWaiting.hidden = false;
       if(!st.configured){
         els.waitingSub.textContent = '운영자가 아직 이벤트를 설정하지 않았어요.';
+      } else if(st.endDate && st.endDate !== st.openDate){
+        els.waitingSub.textContent = '열리는 기간: ' + st.openDate + ' ~ ' + st.endDate;
       } else {
         els.waitingSub.textContent = '열리는 날: ' + st.openDate;
       }
@@ -862,6 +873,8 @@
     els.typeMsgBtn.classList.toggle('selected', state.adminType === 'message');
     els.pollOptionsField.hidden = (state.adminType === 'message');
     els.msgSettingsField.hidden = (state.adminType !== 'message');
+    els.endDateField.hidden = (state.adminType !== 'message');
+    els.dateLabel.textContent = (state.adminType === 'message') ? '시작일' : '열리는 날짜';
     els.titleInput.placeholder = (state.adminType === 'message')
       ? '예: 오늘의 익명 메시지'
       : '예: 오늘 회식 장소 어디로 갈까요?';
@@ -882,6 +895,7 @@
     }
     els.todayHint.textContent = '이 날짜에만 참여자 화면이 열립니다. 오늘 날짜: ' + today;
     els.maxMsgInput.value = (cfg && cfg.maxMessages) || 2;
+    els.endDateInput.value = (cfg && cfg.endDate) || '';
     applyAdminType(cfg && cfg.type === 'message' ? 'message' : 'poll');
   }
 
@@ -917,6 +931,7 @@
     if(!title){ alert('제목을 입력해주세요.'); return; }
     if(state.adminType === 'poll' && options.length < 2){ alert('선택지를 최소 2개 입력해주세요.'); return; }
     var maxMessages = parseInt(els.maxMsgInput.value, 10) || 2;
+    var endDate = (state.adminType === 'message') ? (els.endDateInput.value || date) : '';
 
     els.saveBtn.disabled = true;
     els.saveBtn.textContent = '저장 중...';
@@ -924,7 +939,7 @@
     api('admin/save', {
       password: state.adminPassword,
       type: state.adminType,
-      openDate: date, title: title, desc: desc, options: options, maxMessages: maxMessages
+      openDate: date, endDate: endDate, title: title, desc: desc, options: options, maxMessages: maxMessages
     }).then(function(){
       els.saveBtn.disabled = false;
       els.saveBtn.textContent = '저장하기';

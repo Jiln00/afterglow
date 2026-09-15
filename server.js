@@ -91,6 +91,16 @@ function todayStrSeoul() {
   return fmt.format(new Date());
 }
 
+// 이벤트가 지금 열려 있나? 메시지는 기간(openDate~endDate), 투표는 당일만.
+function isOpenNow(cfg, today) {
+  if (!cfg || !cfg.openDate) return false;
+  if (cfg.type === "message") {
+    const end = cfg.endDate || cfg.openDate;
+    return today >= cfg.openDate && today <= end;
+  }
+  return cfg.openDate === today;
+}
+
 // 투표자 지문: 클라이언트 IP + 브라우저(UA) 해시. 같은 기기/브라우저는 같은 값.
 function voterId(req) {
   const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -165,7 +175,7 @@ const server = http.createServer(async (req, res) => {
       if (method === "GET" && apiPath === "state") {
         const cfg = await getConfig();
         const today = todayStrSeoul();
-        const isOpen = !!(cfg && cfg.openDate === today);
+        const isOpen = isOpenNow(cfg, today);
         const type = cfg && cfg.type === "message" ? "message" : "poll";
         let voted = false;
         // 메시지 모드는 지금 중복 허용(테스트) → voted 체크 안 함
@@ -182,6 +192,7 @@ const server = http.createServer(async (req, res) => {
           desc: isOpen ? cfg.desc : null,
           options: isOpen ? cfg.options : null,
           openDate: cfg ? cfg.openDate : null,
+          endDate: cfg ? (cfg.endDate || null) : null,
           configured: !!cfg,
         });
       }
@@ -212,7 +223,7 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         const cfg = await getConfig();
         const today = todayStrSeoul();
-        if (!cfg || cfg.type !== "message" || cfg.openDate !== today) return json(res, { error: "not_open" }, 403);
+        if (!cfg || cfg.type !== "message" || !isOpenNow(cfg, today)) return json(res, { error: "not_open" }, 403);
         const from = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
         if (!from) return json(res, { error: "name_required" }, 400);
         const max = cfg.maxMessages || 2;
@@ -242,6 +253,8 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         if (body.password !== ADMIN_PASSWORD) return json(res, { error: "unauthorized" }, 401);
         const openDate = typeof body.openDate === "string" ? body.openDate : "";
+        var endDate = typeof body.endDate === "string" ? body.endDate : "";
+        if (endDate && endDate < openDate) endDate = openDate; // 종료일이 시작일보다 앞이면 보정
         const title = typeof body.title === "string" ? body.title.trim().slice(0, 120) : "";
         const desc = typeof body.desc === "string" ? body.desc.trim().slice(0, 200) : "";
         const options = Array.isArray(body.options)
@@ -254,7 +267,7 @@ const server = http.createServer(async (req, res) => {
         const maxMessages = Math.min(Math.max(parseInt(body.maxMessages, 10) || 2, 1), 5);
         if (!openDate || !title) return json(res, { error: "missing_fields" }, 400);
         if (type === "poll" && options.length < 2) return json(res, { error: "need_options" }, 400);
-        const cfg = { type, openDate, title, desc, options, maxMessages, updatedAt: Date.now() };
+        const cfg = { type, openDate, endDate: type === "message" ? endDate : "", title, desc, options, maxMessages, updatedAt: Date.now() };
         await setConfig(cfg);
         return json(res, { ok: true, config: cfg });
       }
