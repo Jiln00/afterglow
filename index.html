@@ -663,8 +663,8 @@
     hideAll();
     els.screenMessage.hidden = false;
     els.msgTitle.textContent = st.title || '';
-    if(st.desc && st.desc.trim()){ els.msgDesc.hidden = false; els.msgDesc.textContent = st.desc; }
-    else { els.msgDesc.hidden = true; }
+    els.msgDesc.textContent = (st.desc && st.desc.trim()) ? st.desc : '기간 내 상대에게 익명으로 메시지를 남겨주세요.';
+    els.msgDesc.hidden = false;
     var n = st.maxMessages || 2;
     els.msgBlocks.innerHTML = '';
     var hint = document.createElement('p');
@@ -978,7 +978,11 @@
   els.backToSettingsBtn.addEventListener('click', function(){ showSettings(); });
 
   els.resetDataBtn.addEventListener('click', function(){
-    if(!confirm('현재까지 모인 투표를 모두 삭제할까요? 질문/선택지는 그대로 남아요. 되돌릴 수 없어요.')) return;
+    var isMsg = lastResults && lastResults.type === 'message';
+    var msg = isMsg
+      ? '지금까지 받은 메시지를 모두 삭제할까요? 제목/기간은 그대로 남아요. 되돌릴 수 없어요.'
+      : '현재까지 모인 투표를 모두 삭제할까요? 질문/선택지는 그대로 남아요. 되돌릴 수 없어요.';
+    if(!confirm(msg)) return;
     api('admin/reset', { password: state.adminPassword }).then(function(){
       showResults();
     }).catch(function(err){
@@ -999,13 +1003,18 @@
       lastResults = data;
       var cfg = data.config;
       els.resultsTitle.textContent = cfg && cfg.title ? cfg.title : '(설정된 이벤트 없음)';
-      var isOpen = !!(cfg && cfg.openDate === data.today);
+      var isMsgType = (data.type === 'message') || (cfg && cfg.type === 'message');
+      var start = cfg && cfg.openDate ? cfg.openDate : '';
+      var end = (cfg && cfg.endDate) ? cfg.endDate : start;
+      var isOpen = isMsgType ? (!!start && data.today >= start && data.today <= end) : (!!start && start === data.today);
+      var period = (isMsgType && end && end !== start) ? (start + ' ~ ' + end) : start;
+      var kind = isMsgType ? '익명 메시지' : '투표';
       if(isOpen){
         els.resultsStatusPill.className = 'status-pill live';
-        els.resultsStatusText.textContent = '오늘 열림 · ' + cfg.openDate;
+        els.resultsStatusText.textContent = kind + ' · 열림 · ' + period;
       } else {
         els.resultsStatusPill.className = 'status-pill upcoming';
-        els.resultsStatusText.textContent = cfg && cfg.openDate ? ('열리는 날짜: ' + cfg.openDate) : '날짜 미설정';
+        els.resultsStatusText.textContent = period ? (kind + ' · ' + period) : '미설정';
       }
       renderPollResults();
     }).catch(function(err){
@@ -1031,6 +1040,7 @@
     els.msgResults.hidden = !isMsg;
     if(isMsg){ renderMsgResults(); return; }
 
+    els.resetDataBtn.textContent = '현재 투표 초기화 (되돌릴 수 없음)';
     var opts = (cfg && cfg.options) ? cfg.options.filter(function(o){return o && o.trim();}) : [];
     els.pollResults.innerHTML = '';
     els.voterList.innerHTML = '';
@@ -1074,20 +1084,35 @@
   }
 
   function renderMsgResults(){
+    els.resetDataBtn.textContent = '받은 메시지 초기화 (되돌릴 수 없음)';
     var groups = (lastResults && lastResults.groups) || {};
     var tos = Object.keys(groups);
     els.msgResults.innerHTML = '';
+    var header = document.createElement('div');
+    header.className = 'voter-head';
+    header.innerHTML = '익명 메시지 집계 <span class="voter-sub">운영자 전용 · 받는 사람별</span>';
+    els.msgResults.appendChild(header);
     if(!tos.length){
-      els.msgResults.innerHTML = '<div class="empty-state" style="padding:16px;">아직 받은 메시지가 없어요.</div>';
+      var e = document.createElement('div');
+      e.className = 'empty-state'; e.style.padding = '16px'; e.textContent = '아직 받은 메시지가 없어요.';
+      els.msgResults.appendChild(e);
       return;
     }
     tos.sort(function(a,b){ return groups[b].length - groups[a].length; }); // 통수 많은 순
-    var totalEl = document.createElement('div');
-    totalEl.className = 'total-votes';
-    totalEl.style.textAlign = 'left';
-    totalEl.style.margin = '0 0 14px';
-    totalEl.textContent = '총 ' + (lastResults.total || 0) + '통 · 받는 사람 ' + tos.length + '명';
-    els.msgResults.appendChild(totalEl);
+    var bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 14px;flex-wrap:wrap;';
+    var summary = document.createElement('div');
+    summary.className = 'total-votes';
+    summary.style.cssText = 'text-align:left;margin:0;';
+    summary.textContent = '총 ' + (lastResults.total || 0) + '통 · 받는 사람 ' + tos.length + '명';
+    var copyBtn = document.createElement('button');
+    copyBtn.className = 'btn btn-ghost';
+    copyBtn.style.cssText = 'padding:8px 14px;font-size:.82rem;';
+    copyBtn.textContent = '📋 명단 복사';
+    copyBtn.addEventListener('click', function(){ copyMsgTally(copyBtn); });
+    bar.appendChild(summary);
+    bar.appendChild(copyBtn);
+    els.msgResults.appendChild(bar);
     tos.forEach(function(to){
       var list = groups[to];
       var g = document.createElement('div');
@@ -1108,6 +1133,31 @@
       });
       els.msgResults.appendChild(g);
     });
+  }
+
+  function copyMsgTally(btn){
+    var groups = (lastResults && lastResults.groups) || {};
+    var cfg = (lastResults && lastResults.config) || {};
+    var tos = Object.keys(groups).sort(function(a,b){ return groups[b].length - groups[a].length; });
+    var lines = ['[' + (cfg.title || '익명 메시지') + '] 집계 · 총 ' + (lastResults.total || 0) + '통', ''];
+    tos.forEach(function(to){
+      lines.push('받는 사람: ' + to + ' (' + groups[to].length + '통)');
+      groups[to].forEach(function(m){ lines.push('  ← ' + (m.from || '(이름없음)') + ': ' + (m.content || '')); });
+      lines.push('');
+    });
+    var text = lines.join('\n');
+    var done = function(){ btn.textContent = '✅ 복사됨'; setTimeout(function(){ btn.textContent = '📋 명단 복사'; }, 1500); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text); done(); });
+    } else { fallbackCopy(text); done(); }
+  }
+  function fallbackCopy(text){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    } catch(e){}
   }
 
   hideAll();
