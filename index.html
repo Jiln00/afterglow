@@ -368,7 +368,7 @@
       <h1>이벤트 설정</h1>
       <button class="logout-link" id="logoutBtn">로그아웃</button>
     </div>
-    <button class="reset-link" id="deletePollBtn">이벤트 종료 · 초기화 (준비 중으로 · 되돌릴 수 없음)</button>
+    <button class="reset-link" id="deletePollBtn">투표·이벤트 초기화 (되돌릴 수 없음)</button>
     <hr class="divider" />
 
     <div class="field">
@@ -1175,7 +1175,7 @@
     els.msgResults.hidden = !isMsg;
     if(isMsg){ renderMsgResults(); return; }
 
-    els.resetDataBtn.textContent = '이벤트 종료 · 초기화 (준비 중으로 · 되돌릴 수 없음)';
+    els.resetDataBtn.textContent = '투표·이벤트 초기화 (되돌릴 수 없음)';
     var opts = (cfg && cfg.options) ? cfg.options.filter(function(o){return o && o.trim();}) : [];
     els.pollResults.innerHTML = '';
     els.voterList.innerHTML = '';
@@ -1219,7 +1219,7 @@
   }
 
   function renderMsgResults(){
-    els.resetDataBtn.textContent = '이벤트 종료 · 초기화 (준비 중으로 · 되돌릴 수 없음)';
+    els.resetDataBtn.textContent = '투표·이벤트 초기화 (되돌릴 수 없음)';
     var groups = (lastResults && lastResults.groups) || {};
     var tos = Object.keys(groups);
     els.msgResults.innerHTML = '';

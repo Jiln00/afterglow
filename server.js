@@ -236,6 +236,8 @@ const server = http.createServer(async (req, res) => {
         ) {
           return json(res, { error: "invalid_option" }, 400);
         }
+        // 참여하면 출석부에도 기록(진입 체크인을 놓쳐도 명단에 확실히 남게).
+        await redis(["HSET", rosterKey(cfg.openDate), voterId(req), JSON.stringify({ name: name, ts: Date.now() })]);
         // 한 지문당 1표(HSETNX = 원자적). 이름·선택을 함께 저장 → 운영자가 확인.
         const ballot = JSON.stringify({ name: name, optionIndex: body.optionIndex, ts: Date.now() });
         const fresh = await redis(["HSETNX", ballotsKey(cfg.openDate), voterId(req), ballot]);
@@ -259,6 +261,8 @@ const server = http.createServer(async (req, res) => {
           .filter((m) => m.to && m.content)
           .slice(0, max);
         if (!items.length) return json(res, { error: "empty" }, 400);
+        // 참여하면 출석부에도 기록(진입 체크인을 놓쳐도 명단에 확실히 남게).
+        await redis(["HSET", rosterKey(cfg.openDate), voterId(req), JSON.stringify({ name: from, ts: Date.now() })]);
         // 1인 1회(HSETNX = 원자적). 보낸 사람 지문당 한 필드에 메시지 묶음을 저장 → 재전송 차단.
         const ts = Date.now();
         const payload = JSON.stringify(items.map((m) => ({ from: from, to: m.to, content: m.content, ts: ts })));
