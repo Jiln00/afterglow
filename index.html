@@ -439,6 +439,10 @@
     <div id="msgResults" hidden></div>
 
     <hr class="divider" />
+    <div class="voter-head">진입 명단 <span class="voter-sub">운영자 전용 · 닉네임 입력한 사용자 전원</span></div>
+    <div id="entryRoster"></div>
+
+    <hr class="divider" />
     <div class="btn-row">
       <button class="btn btn-ghost" id="backToSettingsBtn">← 설정으로 돌아가기</button>
     </div>
@@ -569,6 +573,7 @@
     voterList: document.getElementById('voterList'),
     backToSettingsBtn: document.getElementById('backToSettingsBtn'),
     resetDataBtn: document.getElementById('resetDataBtn'),
+    entryRoster: document.getElementById('entryRoster'),
 
     nameInput: document.getElementById('nameInput'),
     nameNextBtn: document.getElementById('nameNextBtn'),
@@ -666,6 +671,8 @@
       setTimeout(function(){ try { els.nameInput.focus(); } catch(e){} }, 30);
       return;
     }
+    // 이름이 있는 채로 열린 화면에 도달 → 세션당 1회 출석부 기록(캐시된 이름으로 재방문한 사람 포함)
+    if(!state.checkedIn){ state.checkedIn = true; checkIn(); }
     // 메시지 모드 → 별도 화면
     if(st.type === 'message'){ renderMessageView(); return; }
     hideAll();
@@ -788,11 +795,19 @@
     });
   });
 
+  // 이름을 정하면 출석부에 기록(투표/메시지 여부 무관). 열려 있고 이름 있을 때만, 실패해도 무시.
+  function checkIn(){
+    var st = state.publicState;
+    if(!st || !st.isOpen || !state.voterName) return;
+    api('checkin', { name: state.voterName }).catch(function(){});
+  }
+
   function goToVote(){
     var v = els.nameInput.value.trim();
     if(!v){ alert('캐릭터 이름을 입력해주세요.'); return; }
     state.voterName = v.slice(0, 40);
     try { localStorage.setItem('afterglow-name', state.voterName); } catch(e){}
+    checkIn();
     renderParticipantView();
   }
   els.nameNextBtn.addEventListener('click', goToVote);
@@ -890,6 +905,7 @@
       else localStorage.removeItem('afterglow-name'); // 비우면 다음 참여 때 다시 입력
     } catch(e){}
     gmShowView();            // 보기 모드로 돌아가며 새 이름 표시
+    checkIn();               // 열려 있으면 출석부에도 갱신
     renderParticipantView(); // 화면 내 이름도 갱신
   }
   els.gmSaveBtn.addEventListener('click', saveNickname);
@@ -1115,6 +1131,7 @@
         els.resultsStatusText.textContent = period ? (kind + ' · ' + period) : '미설정';
       }
       renderPollResults();
+      renderRoster();
     }).catch(function(err){
       console.error(err);
       if(err.status === 401){
@@ -1124,6 +1141,26 @@
         els.pollResults.innerHTML = '<div class="empty-state">결과를 불러오지 못했어요.</div>';
       }
     });
+  }
+
+  function renderRoster(){
+    var roster = (lastResults && lastResults.roster) || [];
+    els.entryRoster.innerHTML = '';
+    if(!roster.length){
+      els.entryRoster.innerHTML = '<div class="empty-state" style="padding:16px;">아직 이름을 입력한 사용자가 없어요.</div>';
+      return;
+    }
+    roster.forEach(function(r, i){
+      var row = document.createElement('div');
+      row.className = 'voter-row';
+      row.innerHTML = '<span class="vname"></span><span class="vchoice"></span>';
+      row.querySelector('.vname').textContent = (i+1) + '. ' + (r.name || '(이름없음)');
+      els.entryRoster.appendChild(row);
+    });
+    var total = document.createElement('div');
+    total.className = 'total-votes';
+    total.textContent = '총 ' + roster.length + '명';
+    els.entryRoster.appendChild(total);
   }
 
   function renderPollResults(){

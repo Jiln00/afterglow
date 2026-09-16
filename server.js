@@ -21,6 +21,8 @@ const K_CONFIG = "afterglow:config";
 function ballotsKey(openDate) { return "afterglow:ballots:" + openDate; }
 // 익명 메시지: 메시지별 해시. field = 랜덤 id(중복 허용), value = JSON {from, to, content, ts}
 function msgsKey(openDate) { return "afterglow:msgs:" + openDate; }
+// 진입 명단(출석부): field = 지문, value = JSON {name, ts}. 투표/메시지와 무관하게 이름 입력만으로 기록.
+function rosterKey(openDate) { return "afterglow:roster:" + openDate; }
 
 async function redis(cmd) {
   const res = await fetch(REST_URL, {
@@ -61,11 +63,20 @@ async function getMessages(openDate) {
   }
   return list;
 }
+async function getRoster(openDate) {
+  const flat = (await redis(["HGETALL", rosterKey(openDate)])) || [];
+  const list = [];
+  for (let j = 1; j < flat.length; j += 2) {
+    try { list.push(JSON.parse(flat[j])); } catch {}
+  }
+  return list;
+}
 async function resetVotes() {
   const cfg = await getConfig();
   if (cfg && cfg.openDate) {
     await redis(["DEL", ballotsKey(cfg.openDate)]);
     await redis(["DEL", msgsKey(cfg.openDate)]);
+    await redis(["DEL", rosterKey(cfg.openDate)]);
   }
 }
 async function deleteAll() {
@@ -73,6 +84,7 @@ async function deleteAll() {
   if (cfg && cfg.openDate) {
     await redis(["DEL", ballotsKey(cfg.openDate)]);
     await redis(["DEL", msgsKey(cfg.openDate)]);
+    await redis(["DEL", rosterKey(cfg.openDate)]);
   }
   await redis(["DEL", K_CONFIG]);
 }
@@ -255,6 +267,17 @@ const server = http.createServer(async (req, res) => {
         return json(res, { ok: true });
       }
 
+      if (method === "POST" && apiPath === "checkin") {
+        // 진입화면에서 이름 입력 시 호출 → 출석부에 기록(투표/메시지 여부 무관). 지문당 1행(HSET=이름 갱신).
+        const body = await readBody(req);
+        const cfg = await getConfig();
+        if (!cfg || !isOpenNow(cfg, todayStrSeoul())) return json(res, { error: "not_open" }, 403);
+        const name = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
+        if (!name) return json(res, { error: "name_required" }, 400);
+        await redis(["HSET", rosterKey(cfg.openDate), voterId(req), JSON.stringify({ name: name, ts: Date.now() })]);
+        return json(res, { ok: true });
+      }
+
       if (method === "POST" && apiPath === "admin/login") {
         const body = await readBody(req);
         if (body.password === ADMIN_PASSWORD) return json(res, { ok: true });
@@ -295,13 +318,17 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         if (body.password !== ADMIN_PASSWORD) return json(res, { error: "unauthorized" }, 401);
         const cfg = await getConfig();
+        // 진입 명단(출석부): 투표/메시지와 무관, 이름 입력 순서(오래된 순)
+        const roster = cfg && cfg.openDate
+          ? (await getRoster(cfg.openDate)).sort((a, b) => (a.ts || 0) - (b.ts || 0))
+          : [];
         if (cfg && cfg.type === "message") {
           // 메시지: 받는 사람별로 묶기
           const msgs = cfg.openDate ? await getMessages(cfg.openDate) : [];
           const groups = {};
           for (const m of msgs) (groups[m.to] = groups[m.to] || []).push({ from: m.from, content: m.content, ts: m.ts });
           for (const to in groups) groups[to].sort((a, b) => (b.ts || 0) - (a.ts || 0));
-          return json(res, { config: cfg, today: todayStrSeoul(), type: "message", groups, total: msgs.length });
+          return json(res, { config: cfg, today: todayStrSeoul(), type: "message", groups, total: msgs.length, roster });
         }
         const ballots = cfg && cfg.openDate ? await getBallots(cfg.openDate) : [];
         const counts = {};
@@ -311,7 +338,7 @@ const server = http.createServer(async (req, res) => {
           .slice()
           .sort((a, b) => (b.ts || 0) - (a.ts || 0))
           .map((b) => ({ name: b.name, optionIndex: b.optionIndex }));
-        return json(res, { config: cfg, today: todayStrSeoul(), type: "poll", counts, totalVotes: ballots.length, voters });
+        return json(res, { config: cfg, today: todayStrSeoul(), type: "poll", counts, totalVotes: ballots.length, voters, roster });
       }
 
       if (method === "POST" && apiPath === "admin/reset") {
