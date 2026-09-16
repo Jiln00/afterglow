@@ -649,6 +649,16 @@
   function renderParticipantView(){
     var st = state.publicState;
     if(!st) return;
+    var already = !!st.voted;
+    // 초기 진입화면: 이벤트 열림 여부와 무관하게, 이름이 없으면 사이트 첫 화면에서 닉네임부터 받는다.
+    if(!already && !state.voterName){
+      hideAll();
+      els.screenName.hidden = false;
+      els.nameInput.value = state.voterName || '';
+      setTimeout(function(){ try { els.nameInput.focus(); } catch(e){} }, 30);
+      return;
+    }
+    // 이름은 있는데 이벤트가 아직 안 열림 → 대기 화면
     if(!st.isOpen){
       hideAll();
       els.screenWaiting.hidden = false;
@@ -659,16 +669,6 @@
       } else {
         els.waitingSub.textContent = '열리는 날: ' + st.openDate;
       }
-      return;
-    }
-    // 이미 투표했나? (서버가 신원 기준으로 판단)
-    var already = !!st.voted;
-    // 투표 전인데 이름을 아직 안 정했으면 → 진입(이름 입력) 화면
-    if(!already && !state.voterName){
-      hideAll();
-      els.screenName.hidden = false;
-      els.nameInput.value = state.voterName || '';
-      setTimeout(function(){ try { els.nameInput.focus(); } catch(e){} }, 30);
       return;
     }
     // 이름이 있는 채로 열린 화면에 도달 → 세션당 1회 출석부 기록(캐시된 이름으로 재방문한 사람 포함)
