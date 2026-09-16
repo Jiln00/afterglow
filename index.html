@@ -304,6 +304,10 @@
     .shell{ padding: 20px 14px 0; }
     .card{ padding: 26px 20px 24px; }
   }
+  /* 터치 기기(아이폰·갤럭시·아이패드): 입력창 16px 미만이면 포커스 시 자동 확대됨 → 16px로 고정해 방지 */
+  @media (pointer: coarse){
+    input[type=text], input[type=date], input[type=password], input[type=number], textarea{ font-size: 16px !important; }
+  }
 </style>
 </head>
 <body>
