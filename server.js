@@ -46,7 +46,7 @@ async function getBallots(openDate) {
   const flat = (await redis(["HGETALL", ballotsKey(openDate)])) || []; // [vid, json, vid, json, ...]
   const list = [];
   for (let j = 1; j < flat.length; j += 2) {
-    try { list.push(JSON.parse(flat[j])); } catch {}
+    try { const v = JSON.parse(flat[j]); v.id = flat[j - 1]; list.push(v); } catch {}
   }
   return list;
 }
@@ -67,7 +67,7 @@ async function getRoster(openDate) {
   const flat = (await redis(["HGETALL", rosterKey(openDate)])) || [];
   const list = [];
   for (let j = 1; j < flat.length; j += 2) {
-    try { list.push(JSON.parse(flat[j])); } catch {}
+    try { const v = JSON.parse(flat[j]); v.id = flat[j - 1]; list.push(v); } catch {}
   }
   return list;
 }
@@ -166,6 +166,11 @@ if (process.argv.includes("--selftest")) {
   const ml = [];
   for (let j = 1; j < flatMsgs.length; j += 2) { const v = JSON.parse(flatMsgs[j]); if (Array.isArray(v)) ml.push(...v); else ml.push(v); }
   console.assert(ml.length === 3, "msg flatten");
+  // 진입 명단 + 투표여부 병합: 같은 지문(id)으로 매칭
+  const rosterX = [{ id: "a", name: "철수" }, { id: "b", name: "영희" }];
+  const voteByX = { a: 0 };
+  const mergedX = rosterX.map((r) => ({ name: r.name, voted: Object.prototype.hasOwnProperty.call(voteByX, r.id) }));
+  console.assert(mergedX[0].voted === true && mergedX[1].voted === false, "roster+vote merge");
   console.log("selftest ok:", today, counts);
   process.exit(0);
 }
@@ -322,8 +327,8 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         if (body.password !== ADMIN_PASSWORD) return json(res, { error: "unauthorized" }, 401);
         const cfg = await getConfig();
-        // 진입 명단(출석부): 투표/메시지와 무관, 이름 입력 순서(오래된 순)
-        const roster = cfg && cfg.openDate
+        // 진입 명단(출석부): 이름 입력 순서(오래된 순). 각 항목에 지문(id) 포함 → 투표/전송 여부 매칭용.
+        const rosterRaw = cfg && cfg.openDate
           ? (await getRoster(cfg.openDate)).sort((a, b) => (a.ts || 0) - (b.ts || 0))
           : [];
         if (cfg && cfg.type === "message") {
@@ -332,6 +337,11 @@ const server = http.createServer(async (req, res) => {
           const groups = {};
           for (const m of msgs) (groups[m.to] = groups[m.to] || []).push({ from: m.from, content: m.content, ts: m.ts });
           for (const to in groups) groups[to].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+          // 진입 명단 + 전송여부: msgs 필드(지문)로 매칭
+          const sentBy = {};
+          const msgFlat = cfg.openDate ? (await redis(["HGETALL", msgsKey(cfg.openDate)])) || [] : [];
+          for (let j = 0; j + 1 < msgFlat.length; j += 2) sentBy[msgFlat[j]] = true;
+          const roster = rosterRaw.map((r) => ({ name: r.name, voted: !!sentBy[r.id], choice: sentBy[r.id] ? "메시지 보냄" : "" }));
           return json(res, { config: cfg, today: todayStrSeoul(), type: "message", groups, total: msgs.length, roster });
         }
         const ballots = cfg && cfg.openDate ? await getBallots(cfg.openDate) : [];
@@ -342,6 +352,15 @@ const server = http.createServer(async (req, res) => {
           .slice()
           .sort((a, b) => (b.ts || 0) - (a.ts || 0))
           .map((b) => ({ name: b.name, optionIndex: b.optionIndex }));
+        // 진입 명단 + 투표여부: 지문으로 투표 매칭 → 각자 뭘 골랐는지(또는 미투표)
+        const opts = (cfg && cfg.options) || [];
+        const voteBy = {};
+        for (const b of ballots) voteBy[b.id] = b.optionIndex;
+        const roster = rosterRaw.map((r) => {
+          const has = Object.prototype.hasOwnProperty.call(voteBy, r.id);
+          const label = has ? (opts[voteBy[r.id]] !== undefined ? opts[voteBy[r.id]] : "(삭제된 선택지)") : "";
+          return { name: r.name, voted: has, choice: label };
+        });
         return json(res, { config: cfg, today: todayStrSeoul(), type: "poll", counts, totalVotes: ballots.length, voters, roster });
       }
 

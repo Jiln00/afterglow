@@ -439,7 +439,7 @@
     <div id="msgResults" hidden></div>
 
     <hr class="divider" />
-    <div class="voter-head">진입 명단 <span class="voter-sub">운영자 전용 · 닉네임 입력한 사용자 전원</span></div>
+    <div class="voter-head">진입 명단 <span class="voter-sub">운영자 전용 · 이름 입력 전원 + 투표/전송 여부</span></div>
     <div id="entryRoster"></div>
 
     <hr class="divider" />
@@ -1155,6 +1155,9 @@
       row.className = 'voter-row';
       row.innerHTML = '<span class="vname"></span><span class="vchoice"></span>';
       row.querySelector('.vname').textContent = (i+1) + '. ' + (r.name || '(이름없음)');
+      var vc = row.querySelector('.vchoice');
+      if(r.voted){ vc.textContent = r.choice || '참여'; }
+      else { vc.textContent = '미참여'; vc.style.color = 'var(--ink-faint)'; }
       els.entryRoster.appendChild(row);
     });
     var total = document.createElement('div');
