@@ -10,6 +10,9 @@ const crypto = require("crypto");
 
 const PORT = process.env.PORT || 8888;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "260908";
+// ⚠️ 테스트 토글: true면 중복 투표/메시지 허용(한 브라우저가 여러 번 제출 가능).
+// 실서비스 전에 반드시 false로 되돌릴 것!
+const ALLOW_DUP = true;
 const INDEX_FILE = path.join(__dirname, "index.html");
 
 // ---- storage: Upstash Redis ----
@@ -206,9 +209,10 @@ const server = http.createServer(async (req, res) => {
         const type = cfg && cfg.type === "message" ? "message" : "poll";
         let voted = false;
         // 투표·메시지 모두 한 지문당 1회 → 이미 참여했는지 확인해 버튼 잠금.
-        if (isOpen && type === "poll") {
+        // 테스트 모드(ALLOW_DUP)면 항상 false → 버튼 계속 눌러 재제출 가능.
+        if (!ALLOW_DUP && isOpen && type === "poll") {
           voted = (await redis(["HEXISTS", ballotsKey(cfg.openDate), voterId(req)])) === 1;
-        } else if (isOpen && type === "message") {
+        } else if (!ALLOW_DUP && isOpen && type === "message") {
           voted = (await redis(["HEXISTS", msgsKey(cfg.openDate), voterId(req)])) === 1;
         }
         return json(res, {
@@ -243,8 +247,13 @@ const server = http.createServer(async (req, res) => {
         }
         // 참여하면 출석부에도 기록(진입 체크인을 놓쳐도 명단에 확실히 남게).
         await redis(["HSET", rosterKey(cfg.openDate), voterId(req), JSON.stringify({ name: name, ts: Date.now() })]);
-        // 한 지문당 1표(HSETNX = 원자적). 이름·선택을 함께 저장 → 운영자가 확인.
         const ballot = JSON.stringify({ name: name, optionIndex: body.optionIndex, ts: Date.now() });
+        if (ALLOW_DUP) {
+          // 테스트 모드: 랜덤 id로 저장 → 같은 기기도 여러 번 투표 가능(전부 집계).
+          await redis(["HSET", ballotsKey(cfg.openDate), crypto.randomBytes(12).toString("hex"), ballot]);
+          return json(res, { ok: true });
+        }
+        // 한 지문당 1표(HSETNX = 원자적). 이름·선택을 함께 저장 → 운영자가 확인.
         const fresh = await redis(["HSETNX", ballotsKey(cfg.openDate), voterId(req), ballot]);
         if (fresh === 0) return json(res, { error: "already_voted" }, 409);
         return json(res, { ok: true });
@@ -268,9 +277,14 @@ const server = http.createServer(async (req, res) => {
         if (!items.length) return json(res, { error: "empty" }, 400);
         // 참여하면 출석부에도 기록(진입 체크인을 놓쳐도 명단에 확실히 남게).
         await redis(["HSET", rosterKey(cfg.openDate), voterId(req), JSON.stringify({ name: from, ts: Date.now() })]);
-        // 1인 1회(HSETNX = 원자적). 보낸 사람 지문당 한 필드에 메시지 묶음을 저장 → 재전송 차단.
         const ts = Date.now();
         const payload = JSON.stringify(items.map((m) => ({ from: from, to: m.to, content: m.content, ts: ts })));
+        if (ALLOW_DUP) {
+          // 테스트 모드: 랜덤 id로 저장 → 같은 기기도 여러 번 전송 가능.
+          await redis(["HSET", msgsKey(cfg.openDate), crypto.randomBytes(12).toString("hex"), payload]);
+          return json(res, { ok: true });
+        }
+        // 1인 1회(HSETNX = 원자적). 보낸 사람 지문당 한 필드에 메시지 묶음을 저장 → 재전송 차단.
         const fresh = await redis(["HSETNX", msgsKey(cfg.openDate), voterId(req), payload]);
         if (fresh === 0) return json(res, { error: "already_sent" }, 409);
         return json(res, { ok: true });
