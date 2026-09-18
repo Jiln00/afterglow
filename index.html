@@ -374,7 +374,7 @@
       <h1>이벤트 설정</h1>
       <button class="logout-link" id="logoutBtn">로그아웃</button>
     </div>
-    <button class="reset-link" id="deletePollBtn">투표·이벤트 초기화 (되돌릴 수 없음)</button>
+    <button class="reset-link" id="deletePollBtn">투표/메시지만 초기화 (집계 비우기 · 이벤트 유지)</button>
     <hr class="divider" />
 
     <div class="field">
@@ -1083,8 +1083,8 @@
   });
 
   els.deletePollBtn.addEventListener('click', function(){
-    if(!confirm('이 이벤트를 종료하고 "준비 중" 상태로 되돌릴까요?\n제목·선택지·모은 투표/메시지가 모두 사라지고 되돌릴 수 없어요.')) return;
-    api('admin/delete', { password: state.adminPassword }).then(function(){
+    if(!confirm('모은 투표/메시지(집계)를 모두 지울까요?\n제목·선택지·기간 설정은 그대로 남고, 이벤트는 계속 열려 있어요. 되돌릴 수 없어요.')) return;
+    api('admin/reset', { password: state.adminPassword }).then(function(){
       showSettings();
     }).catch(function(err){
       console.error(err);
@@ -1184,7 +1184,7 @@
     els.msgResults.hidden = !isMsg;
     if(isMsg){ renderMsgResults(); return; }
 
-    els.resetDataBtn.textContent = '투표·이벤트 초기화 (되돌릴 수 없음)';
+    els.resetDataBtn.textContent = '전체 초기화 (준비 중으로 · 되돌릴 수 없음)';
     var opts = (cfg && cfg.options) ? cfg.options.filter(function(o){return o && o.trim();}) : [];
     els.pollResults.innerHTML = '';
     els.voterList.innerHTML = '';
@@ -1233,7 +1233,7 @@
   }
 
   function renderMsgResults(){
-    els.resetDataBtn.textContent = '투표·이벤트 초기화 (되돌릴 수 없음)';
+    els.resetDataBtn.textContent = '전체 초기화 (준비 중으로 · 되돌릴 수 없음)';
     var groups = (lastResults && lastResults.groups) || {};
     var tos = Object.keys(groups);
     els.msgResults.innerHTML = '';
