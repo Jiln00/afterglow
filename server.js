@@ -131,11 +131,12 @@ function voterId(req) {
 
 function readBody(req) {
   return new Promise((resolve) => {
-    let chunks = "";
-    req.on("data", (c) => (chunks += c));
+    const chunks = [];
+    // Buffer로 모아서 한 번에 UTF-8 디코드 → 한글이 청크 경계에서 쪼개져도 안 깨짐.
+    req.on("data", (c) => chunks.push(c));
     req.on("end", () => {
       try {
-        resolve(JSON.parse(chunks || "{}"));
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
       } catch {
         resolve({});
       }

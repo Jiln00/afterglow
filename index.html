@@ -257,6 +257,12 @@
   .voter-row .vname{ font-size: .9rem; font-weight: 600; color: var(--ink); word-break: break-all; }
   .voter-row .vchoice{ font-size: .84rem; color: var(--accent); font-weight: 600; flex-shrink: 0; }
 
+  .voter-group{ padding: 11px 2px; border-bottom: 1px solid var(--divider); }
+  .voter-group:last-child{ border-bottom: none; }
+  .vg-head{ font-size: .86rem; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+  .vg-names{ font-size: .88rem; color: var(--ink); line-height: 1.65; word-break: break-all; }
+  .vg-names.none{ color: var(--ink-faint); }
+
   .type-row{ display: flex; gap: 8px; }
   .type-btn{ flex: 1; padding: 11px; border-radius: 10px; border: 1.5px solid var(--input-border); background: var(--input-bg); color: var(--ink-soft); font-family: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; transition: border-color .15s ease, background .15s ease, color .15s ease; }
   .type-btn.selected{ border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
@@ -1204,19 +1210,24 @@
     totalEl.textContent = '총 ' + total + '표';
     els.pollResults.appendChild(totalEl);
 
-    // 참여자 명단 (운영자 전용): 누가 무엇을 골랐는지
+    // 참여자 명단 (운영자 전용): 선택지별로 누가 골랐는지 묶어서 한 줄에 나열
     var voters = lastResults.voters || [];
+    els.voterList.innerHTML = '';
     if(!voters.length){
       els.voterList.innerHTML = '<div class="empty-state" style="padding:16px;">아직 참여자가 없어요.</div>';
     } else {
-      voters.forEach(function(v){
-        var choice = (opts[v.optionIndex] !== undefined) ? opts[v.optionIndex] : '(삭제된 선택지)';
-        var row = document.createElement('div');
-        row.className = 'voter-row';
-        row.innerHTML = '<span class="vname"></span><span class="vchoice"></span>';
-        row.querySelector('.vname').textContent = v.name || '(이름없음)';
-        row.querySelector('.vchoice').textContent = choice;
-        els.voterList.appendChild(row);
+      var byOpt = {};
+      voters.forEach(function(v){ (byOpt[v.optionIndex] = byOpt[v.optionIndex] || []).push(v.name || '(이름없음)'); });
+      opts.forEach(function(opt, idx){
+        var names = byOpt[idx] || [];
+        var g = document.createElement('div');
+        g.className = 'voter-group';
+        g.innerHTML = '<div class="vg-head"></div><div class="vg-names"></div>';
+        g.querySelector('.vg-head').textContent = opt + ' (' + names.length + '표)';
+        var nm = g.querySelector('.vg-names');
+        if(names.length){ nm.textContent = names.join(', '); }
+        else { nm.textContent = '아직 없음'; nm.className = 'vg-names none'; }
+        els.voterList.appendChild(g);
       });
     }
   }
